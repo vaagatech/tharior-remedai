@@ -2,7 +2,8 @@
 Tharior Remedai: Enterprise Agentic Autonomous Remediation & Coding Platform.
 Integrates Webhook Ingestion, 10-Tier Dynamic LLM Routing, Anvesh Vector & Knowledge Graph,
 Agentic Self-Healing Reflection, Clarification Desk, A2A Multi-Agent Dispatcher,
-AWS Cognito Auth, Strict User Session Sandboxing, Circuit Breakers, DLQ Replay, and Prometheus Metrics.
+AWS Cognito Auth, Strict User Session Sandboxing, Circuit Breakers, DLQ Replay, Prometheus Metrics,
+Browser Subagent MCP, Background SAST Watcher, Tier 10 Consensus, KEDA Autoscaling Operator, and Git Branch Operator.
 """
 
 import asyncio
@@ -29,14 +30,19 @@ from app.core.session_sandbox import sandbox_manager
 from app.core.auth import cognito_service, get_current_user, CognitoUser, LoginRequest, AuthTokenResponse
 from app.core.circuit_breaker import circuit_breakers
 from app.core.telemetry_replay import observability_engine, DeadLetterRecord
+from app.core.branch_operator import branch_operator, RemediationBranch
+from app.core.keda_operator import keda_operator, KedaScalerStatus, EphemeralWorkerJob
 from app.services.clarification_hub import clarification_hub
 from app.services.tiered_engine import agent_engine
 from app.services.a2a_dispatcher import a2a_dispatcher
 from app.services.anvesh_client import anvesh_client
 from app.services.llm_pricing_service import llm_pricing_service
 from app.services.llm_router import llm_router
+from app.services.background_sast_watcher import sast_watcher, SASTScanReport
+from app.services.consensus_engine import consensus_engine, ConsensusResolution
 from app.mcp.client import MCPClient
 from app.mcp.servers.telemetry import TelemetryMCPServer
+from app.mcp.servers.browser_subagent import BrowserSubagentMCPServer, VisualAuditReport
 
 
 @asynccontextmanager
@@ -54,7 +60,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Tharior Remedai Gateway",
     description="Tharior Remedai — Enterprise-grade Agentic Autonomous Coding & Remediation Platform (A2A + MCP + Anvesh) with 10-Tier Routing, User Sandboxing & Clarification Desk.",
-    version="2.1.0",
+    version="2.3.0",
     lifespan=lifespan
 )
 
@@ -126,7 +132,7 @@ async def refresh_model_pricing(force: bool = Query(default=True)):
 class RouteTestRequest(BaseModel):
     model: str = "openai/gpt-4o"
     prompt: str = "What is the meaning of life?"
-    routing_mode: Optional[str] = "GATEWAY"  # "GATEWAY" or "STRAIGHT"
+    routing_mode: Optional[str] = "GATEWAY"
 
 
 @app.post("/api/v1/models/route-test")
@@ -138,6 +144,41 @@ async def test_llm_route(req: RouteTestRequest, user: CognitoUser = Depends(get_
         messages=messages,
         routing_mode=req.routing_mode
     )
+
+
+# --- KEDA OPERATOR & AUTOSCALING CONTROLLER ---
+
+@app.get("/api/v1/keda/status", response_model=KedaScalerStatus)
+async def get_keda_status(user: CognitoUser = Depends(get_current_user)):
+    """Returns live KEDA ScaledObject metrics, current replicas, and queue lag."""
+    return keda_operator.get_scaler_status()
+
+
+@app.get("/api/v1/keda/jobs", response_model=List[EphemeralWorkerJob])
+async def list_keda_jobs(user: CognitoUser = Depends(get_current_user)):
+    """Returns all active single-tenant ephemeral ScaledJob worker pods."""
+    return keda_operator.list_active_jobs(tenant_id=user.tenant_id)
+
+
+# --- GIT BRANCHING & PR OPERATOR ---
+
+@app.get("/api/v1/branches", response_model=List[RemediationBranch])
+async def list_remediation_branches(
+    repo_name: Optional[str] = None,
+    user: CognitoUser = Depends(get_current_user)
+):
+    """Returns all managed remediation branches and PR lifecycle states."""
+    return branch_operator.list_branches(repo_name=repo_name)
+
+
+class BranchSyncRequest(BaseModel):
+    branch_id: str
+
+
+@app.post("/api/v1/branches/sync")
+async def sync_branch(req: BranchSyncRequest, user: CognitoUser = Depends(get_current_user)):
+    """Triggers automated trunk rebase and merge conflict detection for a remediation branch."""
+    return await branch_operator.sync_and_rebase_trunk(req.branch_id)
 
 
 # --- ANVESH STORAGE & VECTOR DB APIS ---
@@ -247,7 +288,6 @@ async def replay_dlq_record(dlq_id: str, user: CognitoUser = Depends(get_current
     if not record:
         raise HTTPException(status_code=404, detail="Dead letter record not found")
 
-    # Reconstruct payload
     payload_dict = record.input_payload or {
         "ticket_id": record.ticket_id,
         "repo_name": "unknown/repo",
@@ -258,10 +298,7 @@ async def replay_dlq_record(dlq_id: str, user: CognitoUser = Depends(get_current
     ticket.tenant_group = user.tenant_id
     ticket.user_email = user.email
 
-    # Mark as replayed
     observability_engine.mark_replayed(dlq_id)
-
-    # Launch execution task
     asyncio.create_task(agent_engine.process_ticket(ticket))
 
     return {
@@ -278,6 +315,64 @@ async def get_circuit_breakers():
     return {name: cb.get_metrics() for name, cb in circuit_breakers.items()}
 
 
+# --- AUTONOMOUS VISUAL BROWSER SUBAGENT ---
+
+class BrowserAuditRequest(BaseModel):
+    url: str = "http://localhost:5173"
+    selector: Optional[str] = None
+
+
+@app.post("/api/v1/browser/audit", response_model=VisualAuditReport)
+async def audit_browser_ui(req: BrowserAuditRequest, user: CognitoUser = Depends(get_current_user)):
+    """Executes headless browser visual render and WCAG accessibility audit."""
+    return await BrowserSubagentMCPServer.audit_accessibility_and_dom(req.url)
+
+
+@app.post("/api/v1/browser/screenshot")
+async def capture_browser_screenshot(req: BrowserAuditRequest, user: CognitoUser = Depends(get_current_user)):
+    """Captures visual SVG screenshot of specified viewport or element."""
+    return await BrowserSubagentMCPServer.capture_screenshot(req.url, req.selector)
+
+
+# --- BACKGROUND REPOSITORY LINT & SAST WATCHER ---
+
+class SASTScanRequest(BaseModel):
+    repo_name: str = "org/payments-service"
+
+
+@app.get("/api/v1/sast/scans", response_model=List[SASTScanReport])
+async def list_sast_scans(user: CognitoUser = Depends(get_current_user)):
+    """Returns recent SAST security and memory leak scan reports."""
+    return sast_watcher.list_scans(tenant_id=user.tenant_id)
+
+
+@app.post("/api/v1/sast/scan-now", response_model=SASTScanReport)
+async def trigger_sast_scan(req: SASTScanRequest, user: CognitoUser = Depends(get_current_user)):
+    """Triggers on-demand AST vulnerability scan against indexed repository."""
+    return await sast_watcher.scan_repository(req.repo_name, tenant_id=user.tenant_id)
+
+
+# --- MULTI-MODEL AST CONSENSUS ENGINE (TIER 10) ---
+
+class ConsensusRequest(BaseModel):
+    ticket_id: str = "GH-SEC-991"
+    title: str = "Fix Critical Distributed Deadlock in Stripe Webhook Handler"
+    description: str = "Race condition allows concurrent unacknowledged webhooks to deadlock database transaction pool."
+    ast_context: Optional[str] = "class WebhookHandler: async def process(self): ..."
+
+
+@app.post("/api/v1/consensus/resolve", response_model=ConsensusResolution)
+async def resolve_with_consensus(req: ConsensusRequest, user: CognitoUser = Depends(get_current_user)):
+    """Executes multi-model consensus across Claude 3.7, OpenAI o1, and Gemini 2.0 Pro."""
+    return await consensus_engine.resolve_with_consensus(
+        ticket_id=req.ticket_id,
+        task_title=req.title,
+        task_description=req.description,
+        ast_context=req.ast_context or "",
+        tenant_id=user.tenant_id
+    )
+
+
 # --- WEBHOOK INGESTION ---
 
 @app.post("/api/v1/tickets/webhook", status_code=status.HTTP_202_ACCEPTED)
@@ -292,21 +387,18 @@ async def webhook_ingest(
     payload.tenant_group = user.tenant_id
     payload.user_email = user.email
 
-    # Check OS memory headroom prior to ingestion
     if not resource_guard.check_headroom():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Node memory headroom critically low. Garbage collection in progress."
         )
 
-    # Initialize isolated session sandbox
     session = sandbox_manager.create_session(
         tenant_id=user.tenant_id,
         user_id=user.user_id,
         user_email=user.email
     )
 
-    # Launch non-blocking reactive agent processing
     asyncio.create_task(agent_engine.process_ticket(payload))
     
     return {
@@ -357,7 +449,6 @@ async def answer_clarification(session_id: str, request: ClarificationAnswerRequ
     if not session:
         raise HTTPException(status_code=404, detail="Clarification session not found")
 
-    # Resume the agent with clarified context
     ticket = TicketPayload(
         ticket_id=session.ticket_id,
         source="clarification_desk",
@@ -397,7 +488,6 @@ async def get_execution_report(task_id: str):
     """Returns a single execution report by task_id."""
     report = agent_engine.reports.get(task_id)
     if not report:
-        # Fallback to Anvesh Document Store
         doc = anvesh_client.get_document("execution_reports", task_id)
         if doc:
             return doc
@@ -405,7 +495,7 @@ async def get_execution_report(task_id: str):
     return report
 
 
-# --- MCP DIRECT EXECUTION (Interactive Test Bench) ---
+# --- MCP DIRECT EXECUTION ---
 
 class MCPExecuteRequest(BaseModel):
     server: str
@@ -450,7 +540,7 @@ async def trigger_garbage_collection():
 async def websocket_events_endpoint(websocket: WebSocket):
     """
     Real-time reactive event stream.
-    Broadcasts trace steps, clarification state changes, and pod metrics to dashboard clients.
+    Broadcasts trace steps, clarification state changes, speculative diffs, and pod metrics to dashboard clients.
     """
     await event_bus.register(websocket)
     try:

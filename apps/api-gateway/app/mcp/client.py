@@ -1,7 +1,7 @@
 """
 Standardized MCP Client.
 Dispatches JSON-RPC 2.0 tool calls to registered stateless MCP servers
-(Anvesh Storage, Knowledge Graph, Sandbox Runner, Git PR Engine, Telemetry).
+(Anvesh Storage, Knowledge Graph, Sandbox Runner, Git PR Engine, Browser Subagent, Telemetry).
 """
 
 import time
@@ -11,6 +11,7 @@ from app.mcp.servers.knowledge_graph import KnowledgeGraphMCPServer
 from app.mcp.servers.sandbox_runner import SandboxRunnerMCPServer
 from app.mcp.servers.git_engine import GitEngineMCPServer
 from app.mcp.servers.telemetry import TelemetryMCPServer
+from app.mcp.servers.browser_subagent import BrowserSubagentMCPServer
 
 
 class MCPClient:
@@ -26,6 +27,7 @@ class MCPClient:
           - 'graph-okf': Code AST and dependency lookups (backed by Anvesh)
           - 'sandbox-runner': Ephemeral PyTest/Linter execution
           - 'git-engine': Git branching and PR creation
+          - 'browser-subagent': Headless browser navigation, screenshots & DOM audits
           - 'telemetry-engine': Cost & token metrics recording
         """
         if server == "anvesh-storage":
@@ -62,15 +64,8 @@ class MCPClient:
         elif server == "graph-okf":
             if tool == "query_ast":
                 return await KnowledgeGraphMCPServer.query_ast(
-                    repo=params.get("repo", "default"),
+                    repo=params.get("repo", ""),
                     query=params.get("query", ""),
-                    file_path=params.get("file_path", ""),
-                    tenant_id=params.get("tenant_id", "default")
-                )
-            elif tool == "get_call_graph":
-                return await KnowledgeGraphMCPServer.get_call_graph(
-                    repo=params.get("repo", "default"),
-                    target_symbol=params.get("target_symbol", ""),
                     tenant_id=params.get("tenant_id", "default")
                 )
 
@@ -78,38 +73,46 @@ class MCPClient:
             if tool == "run_pytest":
                 return await SandboxRunnerMCPServer.run_pytest(
                     patch=params.get("patch", ""),
-                    test_filter=params.get("test_filter", ""),
-                    timeout_sec=params.get("timeout_sec", 30)
+                    test_filter=params.get("test_filter", "")
                 )
             elif tool == "run_linter":
                 return await SandboxRunnerMCPServer.run_linter(
-                    file_content=params.get("file_content", ""),
-                    linter=params.get("linter", "ruff")
+                    files=params.get("files", [])
                 )
 
         elif server == "git-engine":
-            if tool == "create_branch":
-                return await GitEngineMCPServer.create_branch(
-                    repo=params.get("repo", "default"),
-                    base_branch=params.get("base_branch", "main"),
-                    branch_name=params.get("branch_name", "")
-                )
-            elif tool == "create_pr":
+            if tool == "create_pr":
                 return await GitEngineMCPServer.create_pr(
-                    repo=params.get("repo", "default"),
+                    repo=params.get("repo", ""),
                     patch=params.get("patch", ""),
-                    title=params.get("title", "Autonomous Agent Remediation"),
-                    description=params.get("description", ""),
-                    branch_name=params.get("branch_name", "")
+                    title=params.get("title", ""),
+                    description=params.get("description", "")
                 )
 
+        elif server == "browser-subagent":
+            if tool == "navigate_url":
+                return await BrowserSubagentMCPServer.navigate_url(
+                    url=params.get("url", "http://localhost:5173"),
+                    wait_until=params.get("wait_until", "networkidle")
+                )
+            elif tool == "capture_screenshot":
+                return await BrowserSubagentMCPServer.capture_screenshot(
+                    url=params.get("url", "http://localhost:5173"),
+                    selector=params.get("selector")
+                )
+            elif tool == "audit_accessibility_and_dom":
+                res = await BrowserSubagentMCPServer.audit_accessibility_and_dom(
+                    url=params.get("url", "http://localhost:5173")
+                )
+                return res.model_dump()
+
         elif server == "telemetry-engine":
-            if tool == "record_metric":
+            if tool in ("record_metric", "record_task_execution", "record_cost"):
                 return await TelemetryMCPServer.record_task_execution(
                     task_id=params.get("task_id", ""),
                     ticket_id=params.get("ticket_id", ""),
                     model=params.get("model", ""),
-                    tier=params.get("tier", "tier_4_mid_generalist"),
+                    tier=params.get("tier", "nano"),
                     cost_usd=params.get("cost_usd", 0.0),
                     latency_ms=params.get("latency_ms", 0.0),
                     input_tokens=params.get("input_tokens", 0),
@@ -117,4 +120,4 @@ class MCPClient:
                     success=params.get("success", True)
                 )
 
-        return {"status": "UNKNOWN_TOOL", "server": server, "tool": tool}
+        raise ValueError(f"Unknown MCP tool invocation: server '{server}', tool '{tool}'")

@@ -8,6 +8,8 @@ import {
   Users,
   Zap,
   ShieldCheck,
+  Globe,
+  ShieldAlert,
 } from 'lucide-react';
 import { useLiveEvents } from './hooks/useLiveEvents';
 import { DeveloperDashboard } from './components/DeveloperDashboard';
@@ -17,12 +19,14 @@ import { TicketSimulator } from './components/TicketSimulator';
 import { SandboxTerminal } from './components/SandboxTerminal';
 import { CostAnalytics } from './components/CostAnalytics';
 import { ObservabilityDesk } from './components/ObservabilityDesk';
+import { BrowserPreviewDesk } from './components/BrowserPreviewDesk';
+import { SecuritySASTDesk } from './components/SecuritySASTDesk';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import type { TaskExecutionReport } from './types';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'clarifications' | 'a2a' | 'simulator' | 'sandbox' | 'analytics' | 'observability'
+    'overview' | 'clarifications' | 'a2a' | 'simulator' | 'sandbox' | 'analytics' | 'observability' | 'browser' | 'sast'
   >('overview');
 
   const [selectedReport, setSelectedReport] = useState<TaskExecutionReport | null>(null);
@@ -144,6 +148,30 @@ export function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab('browser')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'browser'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5 text-sky-400" />
+            <span>Browser Subagent</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sast')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'sast'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+            <span>Security & SAST</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('observability')}
             className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'observability'
@@ -220,6 +248,14 @@ export function App() {
               reports={reports}
               selectedReport={selectedReport}
             />
+          )}
+
+          {activeTab === 'browser' && (
+            <BrowserPreviewDesk />
+          )}
+
+          {activeTab === 'sast' && (
+            <SecuritySASTDesk />
           )}
 
           {activeTab === 'observability' && (

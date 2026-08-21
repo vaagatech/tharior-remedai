@@ -1,10 +1,13 @@
 version: '3.8'
 
 services:
-  autonomous-agent-engine:
+  # Discrete Application 1: FastAPI API Gateway & Multi-Tier Agent Engine
+  api-gateway:
     build:
-      context: .
+      context: ./apps/api-gateway
       dockerfile: Dockerfile
+    image: tharior/api-gateway:latest
+    container_name: tharior-api-gateway
     ports:
       - "8000:8000"
     environment:
@@ -12,15 +15,47 @@ services:
       - LITELLM_TELEMETRY=False
       - MAX_MEMORY_MB=300
       - GC_RESERVE_RATIO=0.20
-      - NANO_MODEL=gemini/gemini-1.5-flash-8b
-      - MID_MODEL=claude-3-5-haiku-20241022
-      - FRONTIER_MODEL=claude-3-7-sonnet-20250219
+      - ANVESH_ENDPOINT=http://anvesh-service:9090
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 300M
+          cpus: '1.0'
+          memory: 512M
         reservations:
-          cpus: '0.10'
-          memory: 120M
+          cpus: '0.25'
+          memory: 256M
+    restart: unless-stopped
+
+  # Discrete Application 2: React + Vite Interactive Developer Dashboard
+  web-desk:
+    build:
+      context: ./apps/web-desk
+      dockerfile: Dockerfile
+    image: tharior/web-desk:latest
+    container_name: tharior-web-desk
+    ports:
+      - "5173:80"
+    depends_on:
+      - api-gateway
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
+
+  # Discrete Application 3: Documentation & Technical Architecture Site
+  docs-site:
+    build:
+      context: ./apps/docs-site
+      dockerfile: Dockerfile
+    image: tharior/docs-site:latest
+    container_name: tharior-docs-site
+    ports:
+      - "8080:80"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
     restart: unless-stopped

@@ -8,31 +8,31 @@
 
 ## 🏛️ Monorepo Architecture
 
-Tharior Remedai is organized as a high-performance multi-package monorepo:
+Tharior Remedai is organized as a high-performance multi-package monorepo with discrete, decoupled Docker containers for each application:
 
 ```
 autonomous-coding-engineer/ (Monorepo Root)
 ├── apps/
 │   ├── api-gateway/         # FastAPI Orchestrator, Dual LLM Router, Circuit Breakers & DLQ
-│   │   ├── app/
-│   │   │   ├── core/        # ResilienceGuard, CircuitBreaker, EventBus, TelemetryReplay
-│   │   │   ├── services/    # TieredEngine, LLMRouter, PricingService, ClarificationHub
-│   │   │   ├── models/      # Pydantic data schemas and contracts
-│   │   │   └── mcp/         # Model Context Protocol servers (Anvesh, Sandbox, VCS)
-│   │   ├── Dockerfile
+│   │   ├── app/             # Core, Services, Models, MCP Tools
+│   │   ├── Dockerfile       # Standalone Python 3.11-slim image (tharior/api-gateway)
 │   │   └── requirements.txt
 │   ├── web-desk/            # React + Vite Developer Dashboard & Observability UI
 │   │   ├── src/             # Dashboard, A2A visualizer, DLQ Replay bench, Terminal
+│   │   ├── nginx.conf       # Lightweight SPA Nginx configuration
+│   │   ├── Dockerfile       # Standalone Node builder -> Nginx image (tharior/web-desk)
 │   │   └── package.json
 │   └── docs-site/           # Anvesh-themed GitHub Pages documentation suite
 │       ├── index.html, 10-tier-llm.html, architecture.html, anvesh-storage.html...
+│       ├── nginx.conf       # Static docs Nginx configuration
+│       ├── Dockerfile       # Standalone static Nginx image (tharior/docs-site)
 │       └── assets/          # SVG logos, Favicons, Stylesheets
 ├── packages/
 │   ├── anvesh-sdk/          # Shared Anvesh Vector DB & Knowledge Graph Python SDK
 │   └── agent-protocols/     # Shared A2A Agent schemas, 10-Tier types & MCP protocols
 ├── deploy/
-│   ├── k8s/                 # Kubernetes Deployment, HPA, KEDA ScaledObject & ScaledJob
-│   └── docker/              # Docker compose container runtime
+│   ├── k8s/                 # Kubernetes Deployment, HPA, KEDA ScaledObject, ScaledJob & CRDs
+│   └── docker/              # Docker Compose multi-service configuration
 ├── tests/                   # Monorepo integration, security, & end-to-end PyTest suite
 ├── package.json             # Root npm workspaces configuration
 ├── pytest.ini               # Root Python test runner configuration
@@ -63,7 +63,7 @@ make dev-web
 # or: npm run dev:web (Runs on http://localhost:5173)
 ```
 
-### Serve Documentation Site
+### Start Documentation Site
 ```bash
 make dev-docs
 # or: npm run dev:docs (Runs on http://localhost:8080)
@@ -71,10 +71,24 @@ make dev-docs
 
 ---
 
-## 🌟 Key Capabilities
+## 🐳 Discrete Docker Container Deployment
 
-1. **Multi-Dimensional 10-Tier LLM Engine**: Greedy Low-Cost First routing balancing cost, throughput, and benchmarks (HumanEval, SWE-bench).
-2. **Anvesh Unified Storage**: Tenant-isolated vector embeddings and AST graph traversal.
-3. **Zero-Missed Observability & DLQ Replay**: Structured correlation tracing with non-blocking failure quarantine and on-demand replay.
-4. **Resilient Circuit Breakers**: Automatic fallbacks for OpenRouter Gateway, Anvesh storage, and MCP tools.
-5. **Session Isolation & Autoscaling**: Strict per-tenant sandboxing with K8s HPA and KEDA event-driven workers.
+Each application has its own dedicated, optimized, and single-purpose Docker image:
+
+| Service | Dockerfile | Base Image | Port | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **API Gateway** | [`apps/api-gateway/Dockerfile`](file:///Users/karthiksp/projects/autonomous-coding-engineer/apps/api-gateway/Dockerfile) | `python:3.11-slim` | `8000` | FastAPI backend, A2A mesh & MCP tools |
+| **Web Desk** | [`apps/web-desk/Dockerfile`](file:///Users/karthiksp/projects/autonomous-coding-engineer/apps/web-desk/Dockerfile) | `nginx:alpine-slim` | `5173:80` | Production compiled React/Vite SPA |
+| **Docs Site** | [`apps/docs-site/Dockerfile`](file:///Users/karthiksp/projects/autonomous-coding-engineer/apps/docs-site/Dockerfile) | `nginx:alpine-slim` | `8080:80` | Technical documentation and benchmark site |
+
+### Build Individual Images
+```bash
+make docker-build-api   # Builds tharior/api-gateway:latest
+make docker-build-web   # Builds tharior/web-desk:latest
+make docker-build-docs  # Builds tharior/docs-site:latest
+```
+
+### Launch Complete Stack with Docker Compose
+```bash
+docker compose up -d
+```

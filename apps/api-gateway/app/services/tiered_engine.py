@@ -2,13 +2,14 @@
 Tharior Remedai: 10-Tier Multi-Dimensional LLM Orchestration & Cost Control Engine backed by Anvesh.
 Implements dynamic 10-tier multi-dimensional routing (Knowledge vs Reasoning vs Coding),
 sub-100ms complexity classification, greedy Low-Cost First scheduling, adaptive self-healing reflection,
-quarantine-resilient error handling, Anvesh AST discovery, and Straight vs Gateway LLM routing.
+streaming speculative diff previews, browser subagent visual audit, consensus voting, and DLQ quarantine.
 """
 
 import json
 import os
 import time
 import uuid
+import asyncio
 import logging
 from typing import Dict, Any, Tuple, Optional, List
 
@@ -24,6 +25,8 @@ from app.services.clarification_hub import clarification_hub
 from app.services.anvesh_client import anvesh_client
 from app.services.llm_pricing_service import llm_pricing_service
 from app.services.llm_router import llm_router
+from app.services.consensus_engine import consensus_engine
+from app.mcp.servers.browser_subagent import BrowserSubagentMCPServer
 
 logger = logging.getLogger("tiered_engine")
 
@@ -120,8 +123,7 @@ class ReactiveAgentEngine:
     ) -> TaskExecutionReport:
         """
         Executes end-to-end task resolution through the 10-tiered multi-agent pipeline.
-        Defensively protected: any failure is quarantined to DLQ for replay while the
-        remaining pipeline items proceed smoothly.
+        Includes live speculative diff streaming and visual browser audits for UI tickets.
         """
         start_clock = time.perf_counter()
         task_id = f"task_{uuid.uuid4().hex[:8]}"
@@ -179,7 +181,6 @@ class ReactiveAgentEngine:
             report.status = TaskStatus.CLASSIFYING
             step1_start = time.perf_counter()
             
-            # Query AST subgraph from Anvesh with circuit breaker protection
             anvesh_cb = circuit_breakers["anvesh_storage"]
             graph_data = await anvesh_cb.call(
                 MCPClient.execute,
@@ -241,59 +242,105 @@ class ReactiveAgentEngine:
                 })
                 return report
 
-            # Step 3: Synthesis with Target Tier Model via Dual Router
+            # Step 3: Synthesis with Target Tier Model or Consensus Ensemble
             report.status = TaskStatus.SYNTHESIZING
             report.tier = tier
             tier_spec = llm_pricing_service.get_tier_spec(tier)
-            selected_model = tier_spec.representative_models[0] if tier_spec.representative_models else "openai/gpt-4o"
-            
             assigned_agent = f"Tier-{tier_spec.tier_number} {tier_spec.name}"
-            report.selected_model = selected_model
-            report.assigned_agent = assigned_agent
-
             step3_start = time.perf_counter()
-            
             clarification_note = f"\nUser Clarification Provided:\n{forced_context}" if forced_context else ""
-            exec_messages = [
-                {
-                    "role": "system",
-                    "content": f"Context: {graph_data.get('ast_context', '')}\nSynthesize a robust, clean git unified diff patch. Specialization: {tier_spec.functional_specialization}."
-                },
-                {
-                    "role": "user",
-                    "content": f"Title: {ticket.title}\nDesc: {ticket.description}{clarification_note}"
-                }
-            ]
 
-            # Call LLM via Router (Straight or Gateway)
-            llm_response = await llm_router.chat_completion(
-                model=selected_model,
-                messages=exec_messages,
-                temperature=0.1,
-                routing_mode=self.routing_mode
-            )
+            # Check if Tier 10 Multi-Model Consensus is requested
+            if tier == TierLevel.TIER_10_ELITE_CONSENSUS or "[consensus]" in ticket.title.lower():
+                consensus_res = await consensus_engine.resolve_with_consensus(
+                    ticket_id=ticket.ticket_id,
+                    task_title=ticket.title,
+                    task_description=f"{ticket.description}{clarification_note}",
+                    ast_context=graph_data.get("ast_context", ""),
+                    tenant_id=tenant_id
+                )
+                patch_text = consensus_res.winning_patch
+                selected_model = consensus_res.winning_model
+                step_cost = consensus_res.total_cost_usd
+                report.selected_model = f"Consensus Ensemble ({selected_model})"
+                report.assigned_agent = "Tier-10 Multi-Model Consensus Agent"
+            else:
+                selected_model = tier_spec.representative_models[0] if tier_spec.representative_models else "openai/gpt-4o"
+                report.selected_model = selected_model
+                report.assigned_agent = assigned_agent
 
-            patch_text = llm_response.get("content", "")
-            step_cost = llm_response.get("cost_usd", 0.0005)
+                exec_messages = [
+                    {
+                        "role": "system",
+                        "content": f"Context: {graph_data.get('ast_context', '')}\nSynthesize a robust, clean git unified diff patch. Specialization: {tier_spec.functional_specialization}."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Title: {ticket.title}\nDesc: {ticket.description}{clarification_note}"
+                    }
+                ]
+
+                # Call LLM via Router
+                llm_response = await llm_router.chat_completion(
+                    model=selected_model,
+                    messages=exec_messages,
+                    temperature=0.1,
+                    routing_mode=self.routing_mode
+                )
+
+                patch_text = llm_response.get("content", "")
+                step_cost = llm_response.get("cost_usd", 0.0005)
+                total_input_tokens += llm_response.get("prompt_tokens", 1000)
+                total_output_tokens += llm_response.get("completion_tokens", 300)
+
             total_cost += step_cost
-            total_input_tokens += llm_response.get("prompt_tokens", 1000)
-            total_output_tokens += llm_response.get("completion_tokens", 300)
             step3_latency = (time.perf_counter() - step3_start) * 1000
             report.patch_diff = patch_text
 
+            # Emit Speculative Diff Streaming Chunks over WebSocket
+            diff_lines = patch_text.splitlines()
+            for i, line in enumerate(diff_lines[:15]):
+                await event_bus.publish("SPECULATIVE_DIFF_CHUNK", {
+                    "task_id": task_id,
+                    "ticket_id": ticket.ticket_id,
+                    "line_index": i,
+                    "chunk": line,
+                    "model": selected_model
+                })
+
             step3_trace = ExecutionTraceStep(
                 phase="SYNTHESIS",
-                agent_name=assigned_agent,
+                agent_name=report.assigned_agent,
                 tier=tier.value,
                 model=selected_model,
-                action=f"Synthesize patch via {llm_response.get('routing_mode', 'GATEWAY')} route ({selected_model})",
+                action=f"Synthesize patch via {self.routing_mode} route ({selected_model})",
                 inputs={"context_tokens": total_input_tokens, "specialization": tier_spec.functional_specialization},
-                outputs={"patch_lines": len(patch_text.splitlines()), "tokens_out": total_output_tokens},
+                outputs={"patch_lines": len(diff_lines), "tokens_out": total_output_tokens},
                 cost_usd=round(step_cost, 6),
-                latency_ms=round(step3_latency + 50.0, 2)
+                latency_ms=round(step3_latency, 2)
             )
             traces.append(step3_trace)
             await event_bus.publish("TRACE_STEP", step3_trace.model_dump())
+
+            # Step 3b: Visual Browser Subagent (for Frontend / UI Tickets)
+            if "ui" in ticket.title.lower() or "frontend" in ticket.repo_name.lower() or "css" in ticket.title.lower():
+                browser_audit = await BrowserSubagentMCPServer.audit_accessibility_and_dom("http://localhost:5173")
+                browser_trace = ExecutionTraceStep(
+                    phase="BROWSER_AUDIT",
+                    agent_name="Autonomous Visual Browser Subagent",
+                    tier=TierLevel.TIER_4_MID_GENERALIST.value,
+                    model="headless-chromium",
+                    action="Capture DOM layout screenshot and verify WCAG accessibility score",
+                    mcp_server="browser-subagent",
+                    mcp_tool="audit_accessibility_and_dom",
+                    inputs={"url": "http://localhost:5173"},
+                    outputs={"accessibility_score": browser_audit.accessibility_score, "violations_count": len(browser_audit.accessibility_violations)},
+                    cost_usd=0.0001,
+                    latency_ms=browser_audit.latency_ms
+                )
+                traces.append(browser_trace)
+                total_cost += browser_trace.cost_usd
+                await event_bus.publish("TRACE_STEP", browser_trace.model_dump())
 
             # Step 4: Run Tests in Ephemeral Sandbox MCP
             report.status = TaskStatus.TESTING
@@ -339,7 +386,7 @@ class ReactiveAgentEngine:
                     "repo": ticket.repo_name,
                     "patch": patch_text,
                     "title": f"fix: {ticket.title}",
-                    "description": f"Autonomous remediation for {ticket.ticket_id}.\n\nSynthesized by {assigned_agent} ({selected_model}) via {self.routing_mode} route."
+                    "description": f"Autonomous remediation for {ticket.ticket_id}.\n\nSynthesized by {report.assigned_agent} ({selected_model}) via {self.routing_mode} route."
                 }
             )
             step5_latency = (time.perf_counter() - step5_start) * 1000
@@ -371,10 +418,8 @@ class ReactiveAgentEngine:
             report.output_tokens = total_output_tokens
             report.completed_at = time.time()
 
-            # Persist report to Anvesh Document Store
             anvesh_client.store_document("execution_reports", task_id, report.model_dump(), tenant_id=tenant_id)
 
-            # Index patch vector in Anvesh for future semantic retrieval
             anvesh_client.insert_vector(
                 collection_name="remediation_patches",
                 item_id=f"patch_{task_id}",
@@ -385,7 +430,6 @@ class ReactiveAgentEngine:
                 user_id=user_id
             )
 
-            # Record Observability Success Event
             observability_engine.record_event(
                 phase="TASK_RESOLVED",
                 action=f"Successfully remediated ticket {ticket.ticket_id}",
@@ -400,7 +444,6 @@ class ReactiveAgentEngine:
             await event_bus.publish("TASK_COMPLETED", report.model_dump())
 
         except Exception as unhandled_err:
-            # Defensive Quarantine: Catch any unhandled failure, quarantine to DLQ, log, and proceed
             logger.error(f"Defensive Exception Barrier caught in task {task_id}: {unhandled_err}")
             dlq_rec = observability_engine.quarantine_failed_record(
                 task_id=task_id,

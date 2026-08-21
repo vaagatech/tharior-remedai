@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>K8s Autoscaling & Isolation — Tharior Remedai</title>
-  <meta name="description" content="Tharior Remedai's Kubernetes Horizontal Pod Autoscalers, KEDA event-driven scaling, in-pod POSIX 0700 sandbox isolation, and AWS Cognito Authentication.">
+  <title>K8s Autoscaling, KEDA & Branching Operators — Tharior Remedai</title>
+  <meta name="description" content="Detailed guide on Tharior Remedai's KEDA Autoscaling Operator, Dynamic Ephemeral Worker Pods, and Git Branching Lifecycle Operator.">
   <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,7 +28,7 @@
         <a class="topnav-link" href="architecture.html">Architecture</a>
         <a class="topnav-link" href="10-tier-llm.html">10-Tier LLM</a>
         <a class="topnav-link" href="anvesh-storage.html">Anvesh Storage</a>
-        <a class="topnav-link active" href="isolation-scaling.html">K8s & Isolation</a>
+        <a class="topnav-link active" href="isolation-scaling.html">K8s, KEDA & Branching</a>
         <a class="topnav-link" href="agent-comparison.html">Agent Benchmark</a>
         <a class="topnav-link" href="api.html">API</a>
       </nav>
@@ -38,7 +38,7 @@
           <svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
         <a class="topnav-btn topnav-btn--ghost" href="https://vaagatech.github.io/anvesh/index.html" target="_blank" rel="noopener noreferrer">Anvesh Engine</a>
-        <a class="topnav-btn topnav-btn--primary" href="agent-comparison.html">Agent Benchmark →</a>
+        <a class="topnav-btn topnav-btn--primary" href="api.html">API Reference →</a>
       </div>
     </div>
   </header>
@@ -58,14 +58,7 @@
         <ul class="sidebar-links">
           <li class="sidebar-item"><a class="sidebar-link" href="10-tier-llm.html">10-Tier Dynamic LLM Engine</a></li>
           <li class="sidebar-item"><a class="sidebar-link" href="anvesh-storage.html">Anvesh Vector & Graph DB</a></li>
-          <li class="sidebar-item"><a class="sidebar-link active" href="isolation-scaling.html">K8s Autoscaling & Isolation</a></li>
-          <li class="sidebar-item"><a class="sidebar-link" href="#cognito-auth">AWS Cognito Authentication</a></li>
-        </ul>
-      </div>
-      <div class="sidebar-section">
-        <div class="sidebar-title">Intelligence & Benchmark</div>
-        <ul class="sidebar-links">
-          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html">Agent Comparison Matrix</a></li>
+          <li class="sidebar-item"><a class="sidebar-link active" href="isolation-scaling.html">K8s, KEDA & Branching</a></li>
         </ul>
       </div>
       <div class="sidebar-section">
@@ -77,35 +70,73 @@
     </aside>
 
     <main class="main-content" id="main-content">
-      <span class="badge-pill badge--amber">Infrastructure & Security</span>
-      <h1>K8s Autoscaling & Strict User Isolation</h1>
+      <span class="badge-pill badge--amber">Kubernetes Operators</span>
+      <h1>KEDA Autoscaling & Git Branching Operators</h1>
       <p>
-        <strong>Tharior Remedai</strong> enforces strict tenant isolation boundaries. One user's session data, 
-        AST cache, or ephemeral scratchpad can never leak into another user's execution environment.
+        <strong>Tharior Remedai</strong> leverages Kubernetes Custom Resource Definitions (CRDs) and specialized operators 
+        for dynamic pod scaling and Git branch lifecycle management.
       </p>
 
-      <h2>1. In-Pod POSIX 0700 Sandboxing</h2>
+      <h2>1. KEDA Autoscaling Operator (`keda_operator.py`)</h2>
       <p>
-        Every active session creates a sandboxed directory (<code>/tmp/sandboxes/{tenant_id}_{user_id}_{session_id}</code>) 
-        restricted to owner-only permissions.
-      </p>
-
-      <h2>2. K8s HPA & KEDA Autoscaling</h2>
-      <p>
-        Tharior Remedai scales dynamically using:
+        The KEDA Operator dynamically balances workloads across two tiers:
       </p>
       <ul>
-        <li><strong>HPA v2</strong>: Scales pod replicas from 3 to 30 based on CPU/Memory utilization.</li>
-        <li><strong>KEDA ScaledObjects</strong>: Triggers worker scaling based on pending remediation queue depth.</li>
-        <li><strong>KEDA ScaledJobs</strong>: Instantiates dedicated single-tenant ephemeral Pods for high-complexity jobs.</li>
+        <li>
+          <strong>Shared Deployment Autoscaling (KEDA ScaledObject)</strong>: 
+          Monitors queue backlog (Redis/Anvesh) and Prometheus active task counts to scale worker pods from 2 to 40 replicas.
+        </li>
+        <li>
+          <strong>Dynamic Ephemeral Pod Provisioning (KEDA ScaledJob)</strong>:
+          When a high-tier task (Tiers 8–10) or mission-critical security task is dispatched, the operator provisions a dedicated, 
+          single-tenant isolated pod with POSIX 0700 scratchpads and auto-terminates upon completion.
+        </li>
+      </ul>
+
+      <h2>2. Git Branching Lifecycle Operator (`branch_operator.py`)</h2>
+      <p>
+        The Branch Operator enforces clean Git practices across all remediation pipelines:
+      </p>
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-title">Sanitized Branch Naming</div>
+          <p class="card-desc">
+            Converts issue metadata into sanitized branch names conforming to standards: 
+            <code>tharior/fix-{TICKET_ID}-{slug}</code>.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">Automated Trunk Rebase</div>
+          <p class="card-desc">
+            Rebases remediation branches on the latest trunk HEAD prior to pull request generation to detect merge conflicts early.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">Post-Merge Branch Pruning</div>
+          <p class="card-desc">
+            Automatically prunes ephemeral branches from git repositories once pull requests are merged or closed.
+          </p>
+        </div>
+      </div>
+
+      <h2>3. Kubernetes Custom Resource Definitions (CRD)</h2>
+      <p>
+        Manifests located in <code>deploy/k8s/</code>:
+      </p>
+      <ul>
+        <li><code>deploy/k8s/crd-remediation-branch.yaml</code>: CRD for <code>RemediationBranch</code> resource.</li>
+        <li><code>deploy/k8s/keda-scaledobject.yaml</code>: ScaledObject definition for deployment scaling.</li>
+        <li><code>deploy/k8s/keda-scaledjob.yaml</code>: ScaledJob definition for single-tenant ephemeral pods.</li>
+        <li><code>deploy/k8s/keda-operator-deployment.yaml</code>: Complete KEDA v2.14 operator and metrics server deployment.</li>
       </ul>
     </main>
 
     <aside class="toc-panel">
       <div class="toc-title">On this page</div>
       <ul class="toc-links">
-        <li class="toc-item"><a class="toc-link" href="#1-in-pod-posix-0700-sandboxing">In-Pod Sandboxing</a></li>
-        <li class="toc-item"><a class="toc-link" href="#2-k8s-hpa--keda-autoscaling">K8s & KEDA Scaling</a></li>
+        <li class="toc-item"><a class="toc-link" href="#1-keda-autoscaling-operator-keda_operatorpy">KEDA Operator</a></li>
+        <li class="toc-item"><a class="toc-link" href="#2-git-branching-lifecycle-operator-branch_operatorpy">Branch Operator</a></li>
+        <li class="toc-item"><a class="toc-link" href="#3-kubernetes-custom-resource-definitions-crd">Kubernetes CRDs</a></li>
       </ul>
     </aside>
   </div>
