@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  autonomous-agent-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LITELLM_TELEMETRY=False
+      - MAX_MEMORY_MB=300
+      - GC_RESERVE_RATIO=0.20
+      - NANO_MODEL=gemini/gemini-1.5-flash-8b
+      - MID_MODEL=claude-3-5-haiku-20241022
+      - FRONTIER_MODEL=claude-3-7-sonnet-20250219
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 300M
+        reservations:
+          cpus: '0.10'
+          memory: 120M
+    restart: unless-stopped

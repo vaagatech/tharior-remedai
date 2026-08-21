@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tharior-agent-protocols"
+version = "2.0.0"
+description = "Pydantic schemas and Agent-to-Agent (A2A) data protocols for Tharior Remedai"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0"
+]

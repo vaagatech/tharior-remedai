@@ -1,0 +1,48 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: autonomous-isolated-task-job
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: autonomous-isolated-task-runner
+spec:
+  jobTargetRef:
+    parallelism: 1
+    completions: 1
+    activeDeadlineSeconds: 1800
+    backoffLimit: 2
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/name: autonomous-isolated-task-pod
+      spec:
+        restartPolicy: Never
+        containers:
+          - name: ephemeral-agent-runner
+            image: ghcr.io/org/autonomous-agent-engine:latest
+            imagePullPolicy: IfNotPresent
+            command: ["python", "-m", "app.workers.isolated_runner"]
+            resources:
+              limits:
+                cpu: "1000m"
+                memory: "512Mi"
+              requests:
+                cpu: "250m"
+                memory: "256Mi"
+            env:
+              - name: IS_ISOLATED_POD
+                value: "true"
+              - name: ANVESH_ENDPOINT
+                value: "http://anvesh-service.anvesh.svc.cluster.local:9090"
+              - name: LLM_ROUTING_MODE
+                value: "GATEWAY"
+  pollingInterval: 10
+  successfulJobsHistoryLimit: 10
+  failedJobsHistoryLimit: 5
+  maxReplicaCount: 50
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-queue.agent-platform.svc.cluster.local:6379
+        listName: isolated_high_tier_tasks
+        listLength: "1"

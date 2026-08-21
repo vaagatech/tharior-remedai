@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autonomous-agent-engine
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: autonomous-agent-engine
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: autonomous-agent-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: autonomous-agent-engine
+    spec:
+      containers:
+        - name: engine
+          image: ghcr.io/org/autonomous-agent-engine:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "300Mi"
+            requests:
+              cpu: "100m"
+              memory: "120Mi"
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: LITELLM_TELEMETRY
+              value: "False"
+            - name: MAX_MEMORY_MB
+              value: "300"
+            - name: GC_RESERVE_RATIO
+              value: "0.20"
+          ports:
+            - containerPort: 8000
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5

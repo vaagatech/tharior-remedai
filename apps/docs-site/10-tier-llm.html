@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>10-Tier Dynamic LLM Engine — Tharior Remedai</title>
+  <meta name="description" content="Tharior Remedai's 10-Tier Multi-Dimensional Dynamic LLM Engine: Knowledge vs Reasoning vs Coding Specializations, Real-World Benchmarks, and Greedy Low-Cost First Optimization.">
+  <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script>
+    (function(){ document.documentElement.setAttribute('data-theme', localStorage.getItem('anvesh-theme') || 'light'); })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="index.html">
+        <img src="assets/images/anvesh-logo.svg" alt="Tharior Remedai">
+      </a>
+      <nav class="topnav-nav">
+        <a class="topnav-link" href="index.html">Overview</a>
+        <a class="topnav-link" href="getting-started.html">Getting Started</a>
+        <a class="topnav-link" href="architecture.html">Architecture</a>
+        <a class="topnav-link active" href="10-tier-llm.html">10-Tier LLM</a>
+        <a class="topnav-link" href="anvesh-storage.html">Anvesh Storage</a>
+        <a class="topnav-link" href="isolation-scaling.html">K8s & Isolation</a>
+        <a class="topnav-link" href="agent-comparison.html">Agent Benchmark</a>
+        <a class="topnav-link" href="api.html">API</a>
+      </nav>
+      <div class="topnav-right">
+        <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">
+          <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a class="topnav-btn topnav-btn--ghost" href="https://vaagatech.github.io/anvesh/index.html" target="_blank" rel="noopener noreferrer">Anvesh Engine</a>
+        <a class="topnav-btn topnav-btn--primary" href="anvesh-storage.html">Anvesh Storage →</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-title">Getting Started</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="index.html">Platform Overview</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="getting-started.html">Installation & Deployment</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="architecture.html">Agentic Architecture</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Core Systems</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link active" href="10-tier-llm.html">10-Tier Dynamic LLM Engine</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="anvesh-storage.html">Anvesh Vector & Graph DB</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="isolation-scaling.html">K8s Autoscaling & Isolation</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="isolation-scaling.html#cognito-auth">AWS Cognito Authentication</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Intelligence & Benchmark</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html">Agent Comparison Matrix</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Reference</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="api.html">REST & WebSocket API</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="main-content" id="main-content">
+      <span class="badge-pill badge--green">Multi-Dimensional Intelligence</span>
+      <h1>10-Tier Multi-Dimensional LLM Hierarchy</h1>
+      <p>
+        <strong>Tharior Remedai</strong> routes tasks across a 10-tier hierarchy evaluated on 
+        <strong>Cost, Performance, Coding Benchmarks (HumanEval & SWE-bench), Knowledge vs Reasoning biases, and Functional Specializations</strong>.
+      </p>
+
+      <div class="callout callout--tip">
+        <div class="callout-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          The "Low-Cost First" Optimization Mandate
+        </div>
+        70%+ of typical repository tickets (typos, docstrings, isolated test assertions, API contract tweaks) are routed to 
+        <strong>Tiers 1, 2, and 3</strong> ($0.0375 to $0.15 / 1M tokens). Expensive frontier models (Tier 8+) are reserved strictly for 
+        multi-service architecture transformations, deadlocks, and consensus validation.
+      </div>
+
+      <h2 id="specialization-matrix">1. Multi-Dimensional Specialization Matrix</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Tier #</th>
+              <th>Functional Specialization</th>
+              <th>Knowledge vs Reasoning Profile</th>
+              <th>Representative Models</th>
+              <th>Benchmarks</th>
+              <th>Prompt $/1M</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="tier-num">Tier 1</td>
+              <td><strong>Documentation & Syntax Lint</strong></td>
+              <td>Knowledge-Biased (Grammars & Docstrings)</td>
+              <td><code>gemini-1.5-flash-8b</code>, <code>qwen-2.5-coder-7b</code></td>
+              <td>HumanEval: 74.2%<br>Ctx: 1M tokens</td>
+              <td class="tier-cost">$0.0375</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 2</td>
+              <td><strong>Ultra-Cheap Fast Remediator</strong></td>
+              <td>Knowledge-Biased (Broad Context & Markdown)</td>
+              <td><code>deepseek-chat (V3)</code>, <code>gemini-2.0-flash-lite</code></td>
+              <td>HumanEval: 82.6%<br>Ctx: 1M tokens</td>
+              <td class="tier-cost">$0.1400</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 3</td>
+              <td><strong>Economical Code Specialist</strong></td>
+              <td>Balanced (Code Syntax + Assertions)</td>
+              <td><code>gpt-4o-mini</code>, <code>qwen-2.5-coder-32b</code></td>
+              <td>SWE-bench: 33.2%<br>HumanEval: 86.8%</td>
+              <td class="tier-cost">$0.1500</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 4</td>
+              <td><strong>Mid-Tier Generalist</strong></td>
+              <td>Balanced (Fast Full-Stack Handlers)</td>
+              <td><code>claude-3-5-haiku</code>, <code>codestral-2501</code></td>
+              <td>SWE-bench: 40.6%<br>HumanEval: 88.9%</td>
+              <td class="tier-cost">$0.8000</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 5</td>
+              <td><strong>Fast Structured Reasoner</strong></td>
+              <td>Reasoning-Biased (Chain-of-Thought / Logic)</td>
+              <td><code>o3-mini (low)</code>, <code>deepseek-r1-70b</code></td>
+              <td>SWE-bench: 44.8%<br>HumanEval: 92.1%</td>
+              <td class="tier-cost">$1.1000</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 6</td>
+              <td><strong>Core Engineering Workhorse</strong></td>
+              <td>Balanced High Capability (Full Modules)</td>
+              <td><code>gpt-4o</code>, <code>claude-3-5-sonnet</code></td>
+              <td>SWE-bench: 49.2%<br>HumanEval: 93.7%</td>
+              <td class="tier-cost">$2.5000</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 7</td>
+              <td><strong>Deep Concurrency Reasoner</strong></td>
+              <td>Ultra-Deep Reasoning (Deadlocks & Races)</td>
+              <td><code>o3-mini (high)</code>, <code>deepseek-r1 (671B)</code></td>
+              <td>SWE-bench: 51.4%<br>HumanEval: 96.1%</td>
+              <td class="tier-cost">$5.0000</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 8</td>
+              <td><strong>Senior Architect</strong></td>
+              <td>Frontier Balanced (Extended Thinking + Repo AST)</td>
+              <td><code>claude-3-7-sonnet</code>, <code>llama-3.1-405b</code></td>
+              <td>SWE-bench: 70.3%<br>HumanEval: 97.4%</td>
+              <td class="tier-cost">$12.0000</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 9</td>
+              <td><strong>Frontier Cognitive Synthesis</strong></td>
+              <td>Frontier Synthesis (Maximal Cognitive Depth)</td>
+              <td><code>openai/o1</code>, <code>claude-3-opus</code>, <code>gpt-4.5</code></td>
+              <td>SWE-bench: 72.8%<br>HumanEval: 98.2%</td>
+              <td class="tier-cost">$25.0000</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 10</td>
+              <td><strong>Elite Multi-Model Consensus</strong></td>
+              <td>Consensus Ensemble (Triple-Engine Verification)</td>
+              <td><code>claude-3.7-sonnet + o1 + gemini-2.0-pro</code></td>
+              <td>SWE-bench: 78.5%<br>Consensus Voting</td>
+              <td class="tier-cost">$60.0000</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="knowledge-vs-reasoning">2. Knowledge vs Reasoning: Real-World Use Cases</h2>
+      <p>
+        Different engineering challenges require different cognitive strengths:
+      </p>
+      <ul>
+        <li><strong>Knowledge & Context Heavy</strong> (Tiers 1, 2, 4): Ingesting massive API documentation, library changelogs, or generating comprehensive markdown release notes. Models like <code>gemini-1.5-flash-8b</code> and <code>gemini-2.0-flash-lite</code> excel here with 1M+ token context windows at fractional cents.</li>
+        <li><strong>Syntax & Code Specialized</strong> (Tiers 3, 4): Fast regex translation, isolated function repair, and PyTest assertions. Models like <code>qwen-2.5-coder-32b</code> and <code>codestral-2501</code> provide high code accuracy without reasoning overhead.</li>
+        <li><strong>Reasoning & Logic Heavy</strong> (Tiers 5, 7): Unwinding complex state machines, race conditions, async mutex deadlocks, and backoff algorithms. Reasoning models like <code>o3-mini</code> and <code>deepseek-r1</code> leverage structured thought traces to solve non-obvious execution flaws.</li>
+        <li><strong>Architecture & Consensus</strong> (Tiers 8, 10): Zero-downtime database migrations, microservice interface refactoring, and financial kernels. <code>claude-3.7-sonnet</code> with hybrid extended thinking and multi-model consensus voting ensure absolute correctness.</li>
+      </ul>
+
+      <h2 id="weekly-sync">3. Automated Weekly Pricing Synchronization</h2>
+      <p>
+        Tharior Remedai queries live model catalogs from OpenRouter every 7 days (or on-demand via <code>POST /api/v1/models/refresh-pricing</code>), 
+        re-evaluates price-to-performance indices, and persists the updated matrix into <strong>Anvesh Document Storage</strong>.
+      </p>
+    </main>
+
+    <aside class="toc-panel">
+      <div class="toc-title">On this page</div>
+      <ul class="toc-links">
+        <li class="toc-item"><a class="toc-link" href="#specialization-matrix">Specialization Matrix</a></li>
+        <li class="toc-item"><a class="toc-link" href="#knowledge-vs-reasoning">Knowledge vs Reasoning</a></li>
+        <li class="toc-item"><a class="toc-link" href="#weekly-sync">Weekly Pricing Sync</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-text">© 2026 Tharior Remedai. Backed by Anvesh.</div>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js"></script>
+</body>
+</html>

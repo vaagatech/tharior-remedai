@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: autonomous-agent-ingress
+  namespace: agent-platform
+  annotations:
+    kubernetes.io/ingress.class: "kong"
+    konghq.com/plugins: "jwt-auth, rate-limiting"
+spec:
+  rules:
+    - host: agent.internal.enterprise
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: autonomous-agent-service
+                port:
+                  number: 8000

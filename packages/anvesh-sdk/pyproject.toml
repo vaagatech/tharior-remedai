@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anvesh-sdk"
+version = "2.0.0"
+description = "Python SDK and Unified Client for Anvesh Vector DB and AST Knowledge Graph"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+    "httpx>=0.25.0",
+    "numpy>=1.24.0"
+]

@@ -1,0 +1,30 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: autonomous-agent-engine-keda
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: autonomous-agent-engine
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: autonomous-agent-engine
+  minReplicaCount: 2
+  maxReplicaCount: 40
+  cooldownPeriod: 300
+  pollingInterval: 15
+  triggers:
+    # Trigger 1: Inbound Webhook Remediations Queue (Redis / Anvesh Stream)
+    - type: redis
+      metadata:
+        address: redis-queue.agent-platform.svc.cluster.local:6379
+        listName: incoming_tickets_queue
+        listLength: "5"
+    # Trigger 2: Active Clarification Sessions / High Workload Prometheus Metric
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-k8s.monitoring.svc.cluster.local:9090
+        metricName: agent_engine_active_tasks_count
+        query: sum(agent_engine_active_tasks_count{namespace="agent-platform"})
+        threshold: "10"
