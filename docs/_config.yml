@@ -1,0 +1,4 @@
+# Disable Jekyll theme conversions; GitHub Pages serves static HTML/CSS directly
+theme: null
+plugins: []
+include: [".nojekyll"]

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — Tharior Remedai</title>
+  <meta name="description" content="Step-by-step installation, deployment, and configuration guide for Tharior Remedai agentic autonomous coding platform.">
+  <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script>
+    (function(){ document.documentElement.setAttribute('data-theme', localStorage.getItem('anvesh-theme') || 'light'); })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="index.html">
+        <img src="assets/images/anvesh-logo.svg" alt="Tharior Remedai">
+      </a>
+      <nav class="topnav-nav">
+        <a class="topnav-link" href="index.html">Overview</a>
+        <a class="topnav-link active" href="getting-started.html">Getting Started</a>
+        <a class="topnav-link" href="architecture.html">Architecture</a>
+        <a class="topnav-link" href="10-tier-llm.html">10-Tier LLM</a>
+        <a class="topnav-link" href="anvesh-storage.html">Anvesh Storage</a>
+        <a class="topnav-link" href="isolation-scaling.html">K8s & Isolation</a>
+        <a class="topnav-link" href="agent-comparison.html">Agent Benchmark</a>
+        <a class="topnav-link" href="api.html">API</a>
+      </nav>
+      <div class="topnav-right">
+        <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">
+          <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a class="topnav-btn topnav-btn--ghost" href="https://vaagatech.github.io/anvesh/index.html" target="_blank" rel="noopener noreferrer">Anvesh Engine</a>
+        <a class="topnav-btn topnav-btn--primary" href="architecture.html">Architecture →</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-title">Getting Started</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="index.html">Platform Overview</a></li>
+          <li class="sidebar-item"><a class="sidebar-link active" href="getting-started.html">Installation & Deployment</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="architecture.html">Agentic Architecture</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Core Systems</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="10-tier-llm.html">10-Tier Dynamic LLM Engine</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="anvesh-storage.html">Anvesh Vector & Graph DB</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="isolation-scaling.html">K8s Autoscaling & Isolation</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="isolation-scaling.html#cognito-auth">AWS Cognito Authentication</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Intelligence & Benchmark</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html">Agent Comparison Matrix</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html#directional-roadmap">Directional Roadmap</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Reference</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="api.html">REST & WebSocket API</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="main-content" id="main-content">
+      <span class="badge-pill badge--green">Deployment Guide</span>
+      <h1>Installing & Running Tharior Remedai</h1>
+      <p>
+        Deploy the Tharior Remedai Agentic Gateway on your local machine, via Docker, 
+        or onto an enterprise Kubernetes cluster with KEDA and HPA operators.
+      </p>
+
+      <h2 id="prerequisites">1. Prerequisites</h2>
+      <ul>
+        <li><strong>Python</strong>: Version 3.10+ (3.11 recommended)</li>
+        <li><strong>Anvesh</strong>: Vector & Knowledge Graph Engine (runs in embedded or remote mode)</li>
+        <li><strong>Kubernetes</strong>: (Optional) v1.28+ for HPA & KEDA deployments</li>
+        <li><strong>LLM Key</strong>: OpenRouter API key (Gateway Route) or direct provider keys (OpenAI, Anthropic, Gemini)</li>
+      </ul>
+
+      <h2 id="local-setup">2. Local Environment Setup</h2>
+      <p>Clone the repository and initialize the Python virtual environment:</p>
+
+      <div class="code-box">
+        <div class="code-header">
+          <span>bash — Clone & Install Tharior Remedai</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code># 1. Clone repository
+git clone https://github.com/org/autonomous-coding-engineer.git
+cd autonomous-coding-engineer
+
+# 2. Create virtual environment & install dependencies
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Verify test suite
+.venv/bin/pytest -v</code></pre>
+      </div>
+
+      <h2 id="running-server">3. Starting the Agentic Gateway</h2>
+      <div class="code-box">
+        <div class="code-header">
+          <span>bash — Launch Tharior Remedai Server</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code># Start the reactive orchestrator on port 8000
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload</code></pre>
+      </div>
+
+      <h2 id="kubernetes-deployment">4. Deploying to Kubernetes (HPA & KEDA)</h2>
+      <p>Deploy to Kubernetes with automated Horizontal Pod Autoscaling and KEDA event-driven scaling:</p>
+
+      <div class="code-box">
+        <div class="code-header">
+          <span>bash — Kubernetes Deployment</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code># 1. Apply Deployment & Config
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+
+# 2. Apply HPA (CPU/Memory scaling) & KEDA (Workload queue scaling)
+kubectl apply -f k8s/hpa.yaml
+kubectl apply -f k8s/keda-scaledobject.yaml
+kubectl apply -f k8s/keda-scaledjob.yaml</code></pre>
+      </div>
+    </main>
+
+    <aside class="toc-panel">
+      <div class="toc-title">On this page</div>
+      <ul class="toc-links">
+        <li class="toc-item"><a class="toc-link" href="#prerequisites">Prerequisites</a></li>
+        <li class="toc-item"><a class="toc-link" href="#local-setup">Local Setup</a></li>
+        <li class="toc-item"><a class="toc-link" href="#running-server">Running Server</a></li>
+        <li class="toc-item"><a class="toc-link" href="#kubernetes-deployment">K8s Deployment</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-text">© 2026 Tharior Remedai. Backed by Anvesh.</div>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js"></script>
+</body>
+</html>

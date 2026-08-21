@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tharior Remedai — Enterprise Agentic Autonomous Coding & Remediation Platform</title>
+  <meta name="description" content="Tharior Remedai is an enterprise-grade agentic autonomous coding platform powered by Anvesh Vector DB & Knowledge Graphs, 10-Tier Dynamic LLM Engine with weekly pricing sync, K8s HPA/KEDA pod isolation, and Straight/Gateway dual routing.">
+  <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/site.css">
+  <script>
+    (function(){ document.documentElement.setAttribute('data-theme', localStorage.getItem('anvesh-theme') || 'light'); })();
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <!-- Top Navigation -->
+  <header class="topnav">
+    <div class="topnav-inner">
+      <a class="topnav-brand" href="index.html">
+        <img src="assets/images/anvesh-logo.svg" alt="Tharior Remedai">
+      </a>
+      <nav class="topnav-nav">
+        <a class="topnav-link active" href="index.html">Overview</a>
+        <a class="topnav-link" href="getting-started.html">Getting Started</a>
+        <a class="topnav-link" href="architecture.html">Architecture</a>
+        <a class="topnav-link" href="10-tier-llm.html">10-Tier LLM</a>
+        <a class="topnav-link" href="anvesh-storage.html">Anvesh Storage</a>
+        <a class="topnav-link" href="isolation-scaling.html">K8s & Isolation</a>
+        <a class="topnav-link" href="agent-comparison.html">Agent Benchmark</a>
+        <a class="topnav-link" href="api.html">API</a>
+      </nav>
+      <div class="topnav-right">
+        <button class="theme-btn" id="themeToggle" aria-label="Toggle theme">
+          <svg id="sunIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a class="topnav-btn topnav-btn--ghost" href="https://vaagatech.github.io/anvesh/index.html" target="_blank" rel="noopener noreferrer">
+          Anvesh Engine
+        </a>
+        <a class="topnav-btn topnav-btn--primary" href="getting-started.html">
+          Quick Start →
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div style="max-width: 1100px; margin: 0 auto; padding: 0 1.5rem;">
+      <div class="hero-badge">
+        <span class="badge-pill badge--brand">Tharior Remedai v2.0</span>
+        <span class="badge-pill badge--green" style="margin-left: 0.4rem;">Agentic Multi-Agent System</span>
+        <span class="badge-pill badge--purple" style="margin-left: 0.4rem;">Powered by Anvesh</span>
+      </div>
+      <h1 class="hero-title">
+        The Agentic Autonomous <br />
+        <span class="hero-title-grad">Remediation & Coding Platform</span>
+      </h1>
+      <p class="hero-subtitle">
+        <strong>Tharior Remedai</strong> grounds autonomous software engineering in <strong>Anvesh Vector DB & AST Knowledge Graphs</strong>, 
+        a <strong>10-Tier Dynamic LLM Engine</strong> with automated weekly pricing sync, 
+        <strong>K8s HPA/KEDA pod autoscaling</strong> with strict POSIX 0700 session isolation, and 
+        <strong>Straight & OpenRouter Gateway</strong> dual routing.
+      </p>
+      <div class="hero-actions">
+        <a class="topnav-btn topnav-btn--primary" style="padding: 0.75rem 1.6rem; font-size: 1rem;" href="getting-started.html">Deploy Tharior Remedai</a>
+        <a class="topnav-btn topnav-btn--ghost" style="padding: 0.75rem 1.6rem; font-size: 1rem;" href="10-tier-llm.html">10-Tier LLM Matrix</a>
+        <a class="topnav-btn topnav-btn--ghost" style="padding: 0.75rem 1.6rem; font-size: 1rem;" href="agent-comparison.html">Agent Benchmark</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Docs Layout -->
+  <div class="docs-layout">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-title">Getting Started</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link active" href="index.html">Platform Overview</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="getting-started.html">Installation & Deployment</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="architecture.html">Agentic Architecture</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Core Systems</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="10-tier-llm.html">10-Tier Dynamic LLM Engine</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="anvesh-storage.html">Anvesh Vector & Graph DB</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="isolation-scaling.html">K8s Autoscaling & Isolation</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="isolation-scaling.html#cognito-auth">AWS Cognito Authentication</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Intelligence & Benchmark</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html">Agent Comparison Matrix</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html#directional-roadmap">Directional Roadmap</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="agent-comparison.html#anti-patterns">Anti-Pattern Guardrails</a></li>
+        </ul>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Reference</div>
+        <ul class="sidebar-links">
+          <li class="sidebar-item"><a class="sidebar-link" href="api.html">REST & WebSocket API</a></li>
+          <li class="sidebar-item"><a class="sidebar-link" href="api.html#mcp-tools">MCP Tools Specification</a></li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content" id="main-content">
+      <div style="margin-bottom: 2rem;">
+        <span class="badge-pill badge--brand">What Makes Tharior Remedai Truly Agentic?</span>
+      </div>
+
+      <h2>Core Agentic Tenets</h2>
+      <p>
+        Unlike simple single-shot code completion tools, <strong>Tharior Remedai</strong> operates as an autonomous, 
+        self-directed agentic system built on six core capabilities:
+      </p>
+
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="card-title">1. A2A Multi-Agent Collaboration</div>
+          <p class="card-desc">
+            Tasks are dynamically delegated between specialized agent cards: Triage & Clarity Agent, Backend Python Agent, Frontend UI Agent, Frontier Architecture Agent, and Security Auditor.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon" style="background: rgba(14,165,233,0.12); color: #0EA5E9;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          </div>
+          <div class="card-title">2. Agentic Reflection & Self-Healing</div>
+          <p class="card-desc">
+            The agent executes generated patches against PyTest suites inside ephemeral sandboxes, analyzes test failure traces, and autonomously reflects and iterates until all tests pass.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon" style="background: rgba(16,185,129,0.12); color: #10B981;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          <div class="card-title">3. Proactive Clarity Verification Gate</div>
+          <p class="card-desc">
+            When requirements are ambiguous or underspecified, the agent pauses instead of hallucinating, presenting structured multiple-choice clarifying questions to human reviewers.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon" style="background: rgba(139,92,246,0.12); color: #8B5CF6;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <div class="card-title">4. 10-Tier Cost-Aware Intelligence</div>
+          <p class="card-desc">
+            Dynamically selects the optimal model tier (from $0.0375/1M micro syntax guards to $140/1M elite consensus) with automated weekly pricing updates from OpenRouter catalogs.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon" style="background: rgba(245,158,11,0.12); color: #F59E0B;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          </div>
+          <div class="card-title">5. Anvesh Vector & Knowledge Graph</div>
+          <p class="card-desc">
+            Grounds reasoning in verified AST declarations and caller/callee subgraphs in Anvesh, eliminating symbol hallucinations and context truncation.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon" style="background: rgba(244,63,94,0.12); color: #F43F5E;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div class="card-title">6. K8s Sandboxing & POSIX 0700 Isolation</div>
+          <p class="card-desc">
+            Guarantees strict tenant and user boundary separation. In-pod sandboxes are restricted with 0700 permission masks, and high-tier jobs scale to dedicated KEDA pods.
+          </p>
+        </div>
+      </div>
+
+      <div class="callout callout--important">
+        <div class="callout-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Agentic Governance & Safety Guardrails
+        </div>
+        Tharior Remedai is engineered with hard safety boundaries: all code modifications are synthesized as Git unified diffs, validated against the Anvesh AST, verified in isolated test containers, and opened as Pull Requests for human review.
+      </div>
+
+      <h2>10-Tier Live Matrix Preview</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>Category</th>
+              <th>Representative Models</th>
+              <th>Cost (Prompt / 1M)</th>
+              <th>Latency</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="tier-num">Tier 1</td>
+              <td><strong>Micro & Syntax Guard</strong></td>
+              <td><code>gemini-1.5-flash-8b</code>, <code>qwen-2.5-coder-7b</code></td>
+              <td class="tier-cost">$0.0375</td>
+              <td>~65ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 2</td>
+              <td><strong>Ultra-Cheap Fast Remediator</strong></td>
+              <td><code>deepseek-chat (V3)</code>, <code>gemini-2.0-flash-lite</code></td>
+              <td class="tier-cost">$0.1400</td>
+              <td>~90ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 3</td>
+              <td><strong>Economical Code Specialist</strong></td>
+              <td><code>gpt-4o-mini</code>, <code>qwen-2.5-coder-32b</code></td>
+              <td class="tier-cost">$0.1500</td>
+              <td>~110ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 4</td>
+              <td><strong>Mid-Tier Generalist</strong></td>
+              <td><code>claude-3-5-haiku</code>, <code>codestral-2501</code></td>
+              <td class="tier-cost">$0.8000</td>
+              <td>~145ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 5</td>
+              <td><strong>Fast Structured Reasoner</strong></td>
+              <td><code>o3-mini (low)</code>, <code>deepseek-r1-70b</code></td>
+              <td class="tier-cost">$1.1000</td>
+              <td>~180ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 6</td>
+              <td><strong>Core Engineering Workhorse</strong></td>
+              <td><code>gpt-4o</code>, <code>claude-3-5-sonnet</code></td>
+              <td class="tier-cost">$2.5000</td>
+              <td>~210ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 7</td>
+              <td><strong>Deep Concurrency Reasoner</strong></td>
+              <td><code>o3-mini (high)</code>, <code>deepseek-r1 (671B)</code></td>
+              <td class="tier-cost">$5.0000</td>
+              <td>~290ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 8</td>
+              <td><strong>Senior Architect</strong></td>
+              <td><code>claude-3-7-sonnet</code>, <code>llama-3.1-405b</code></td>
+              <td class="tier-cost">$12.0000</td>
+              <td>~350ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 9</td>
+              <td><strong>Frontier Cognitive Synthesis</strong></td>
+              <td><code>openai/o1</code>, <code>claude-3-opus</code>, <code>gpt-4.5</code></td>
+              <td class="tier-cost">$25.0000</td>
+              <td>~480ms</td>
+            </tr>
+            <tr>
+              <td class="tier-num">Tier 10</td>
+              <td><strong>Elite Multi-Model Consensus</strong></td>
+              <td><code>claude-3.7-sonnet + o1 + gemini-2.0-pro</code></td>
+              <td class="tier-cost">$60.0000</td>
+              <td>~850ms</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Quick Start Example</h2>
+      <p>Dispatch an autonomous remediation job to Tharior Remedai:</p>
+
+      <div class="code-box">
+        <div class="code-header">
+          <span>bash — Ingest Issue to Tharior Remedai</span>
+          <button class="copy-btn">Copy</button>
+        </div>
+        <pre><code># Dispatch issue to Tharior Remedai Gateway
+curl -X POST http://localhost:8000/api/v1/tickets/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant: payments-team" \
+  -H "Authorization: Bearer sk-cognito-token" \
+  -d '{
+    "ticket_id": "GH-4491",
+    "repo_name": "org/payments-service",
+    "title": "Fix null pointer exception in Stripe webhook payload deserializer",
+    "description": "Deserializer crashes when event_id is absent from payload."
+  }'</code></pre>
+      </div>
+
+      <div style="margin-top: 3rem; text-align: center;">
+        <a class="topnav-btn topnav-btn--primary" style="padding: 0.75rem 2rem; font-size: 1rem;" href="getting-started.html">
+          Continue to Getting Started Guide →
+        </a>
+      </div>
+    </main>
+
+    <!-- Right TOC -->
+    <aside class="toc-panel">
+      <div class="toc-title">On this page</div>
+      <ul class="toc-links">
+        <li class="toc-item"><a class="toc-link" href="#core-agentic-tenets">Agentic Tenets</a></li>
+        <li class="toc-item"><a class="toc-link" href="#10-tier-live-matrix-preview">10-Tier Matrix</a></li>
+        <li class="toc-item"><a class="toc-link" href="#quick-start-example">Quick Start Example</a></li>
+      </ul>
+    </aside>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-text">
+        © 2026 Tharior Remedai. Backed by Anvesh Vector & Knowledge Graph Engine.
+      </div>
+      <div style="display: flex; gap: 1rem;">
+        <a href="https://vaagatech.github.io/anvesh/index.html" target="_blank" style="color: var(--c-text-3); font-size: 0.86rem;">Anvesh Docs</a>
+        <a href="api.html" style="color: var(--c-text-3); font-size: 0.86rem;">API Reference</a>
+        <a href="agent-comparison.html" style="color: var(--c-text-3); font-size: 0.86rem;">Agent Benchmark</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js"></script>
+</body>
+</html>
