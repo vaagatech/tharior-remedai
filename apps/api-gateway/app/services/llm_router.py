@@ -1,5 +1,6 @@
 """
-LLM Dual Router: Straight Route & Gateway Route with Circuit Breaker & Observability.
+LLM Dual Router: Straight Route & Gateway Route with Circuit Breaker, Observability,
+Semantic Caching, Free Model Routing, and Token Budget / Thinking Stream controls.
 Supports direct provider execution (OpenAI, Anthropic, Google, DeepSeek)
 and Unified Gateway execution (OpenRouter AI Gateway) with bearer token auth.
 """
@@ -15,6 +16,8 @@ from litellm import acompletion, completion_cost
 
 from app.core.circuit_breaker import circuit_breakers
 from app.core.telemetry_replay import observability_engine
+from app.services.semantic_cache import semantic_cache
+from app.models.agent import TokenBudgetConfig
 
 logger = logging.getLogger("llm_router")
 
@@ -22,7 +25,8 @@ logger = logging.getLogger("llm_router")
 class LLMRouter:
     """
     Dual-path LLM router supporting Straight direct provider invocation
-    and Gateway proxy invocation with circuit breakers, telemetry, and fallback.
+    and Gateway proxy invocation with circuit breakers, telemetry, semantic caching,
+    and strict token-budget enforcement.
     """
 
     def __init__(self):
@@ -31,6 +35,14 @@ class LLMRouter:
         self.gateway_api_key = os.getenv("OPENROUTER_API_KEY", "")
         self.site_url = os.getenv("SITE_URL", "https://vaagatech.github.io/anvesh")
         self.site_name = os.getenv("SITE_NAME", "Tharior Remedai")
+        self.token_budget = TokenBudgetConfig()
+
+    def update_token_budget(self, config: TokenBudgetConfig) -> TokenBudgetConfig:
+        self.token_budget = config
+        return self.token_budget
+
+    def get_token_budget(self) -> TokenBudgetConfig:
+        return self.token_budget
 
     async def chat_completion(
         self,
@@ -38,14 +50,46 @@ class LLMRouter:
         messages: List[Dict[str, str]],
         temperature: float = 0.1,
         max_tokens: Optional[int] = None,
-        routing_mode: Optional[str] = None
+        routing_mode: Optional[str] = None,
+        repo_name: str = "default",
+        bypass_cache: bool = False
     ) -> Dict[str, Any]:
         """
         Dispatches chat completion request via Straight or Gateway route.
-        Returns unified response with content, token usage, cost, and latency.
+        Checks Semantic Cache first to save token cost and latency.
         """
-        mode = (routing_mode or self.default_routing_mode).upper()
         start_time = time.perf_counter()
+        query_text = " ".join(m.get("content", "") for m in messages if m.get("role") != "system")
+
+        # 1. Semantic Cache Lookup
+        if not bypass_cache:
+            is_hit, cached_entry, sim_score = semantic_cache.lookup(query_text, context_repo=repo_name)
+            if is_hit and cached_entry:
+                latency = round((time.perf_counter() - start_time) * 1000, 2)
+                observability_engine.record_event(
+                    phase="SEMANTIC_CACHE_HIT",
+                    action=f"Resolved query via Semantic Cache (sim={sim_score:.3f}, model={cached_entry.get('model_used')})",
+                    duration_ms=latency,
+                    cost_usd=0.0,
+                    payload={"sim_score": sim_score, "tokens_saved": cached_entry.get("tokens_in", 0) + cached_entry.get("tokens_out", 0)}
+                )
+                return {
+                    "content": cached_entry.get("response_content", ""),
+                    "model": cached_entry.get("model_used", model),
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "cost_usd": 0.0,
+                    "routing_mode": "SEMANTIC_CACHE",
+                    "latency_ms": latency,
+                    "cached_from_created_at": cached_entry.get("created_at"),
+                    "similarity_score": round(sim_score, 4)
+                }
+
+        # 2. Token Budget & Output Conditioning
+        conditioned_messages = self._condition_messages_for_budget(messages)
+        effective_max_tokens = max_tokens or self.token_budget.max_output_tokens
+
+        mode = (routing_mode or self.default_routing_mode).upper()
 
         if mode == "GATEWAY":
             cb = circuit_breakers["openrouter_gateway"]
@@ -54,12 +98,23 @@ class LLMRouter:
                     self._execute_gateway_route,
                     self._fallback_from_gateway,
                     model=model,
-                    messages=messages,
+                    messages=conditioned_messages,
                     temperature=temperature,
-                    max_tokens=max_tokens
+                    max_tokens=effective_max_tokens
                 )
                 res["latency_ms"] = round((time.perf_counter() - start_time) * 1000, 2)
                 
+                # Store in semantic cache
+                semantic_cache.store(
+                    query_text=query_text,
+                    response_content=res.get("content", ""),
+                    model_used=model,
+                    repo_name=repo_name,
+                    tokens_in=res.get("prompt_tokens", 0),
+                    tokens_out=res.get("completion_tokens", 0),
+                    cost_usd=res.get("cost_usd", 0.0)
+                )
+
                 observability_engine.record_event(
                     phase="ROUTER_COMPLETION",
                     action=f"Completed LLM call via {res.get('routing_mode', 'GATEWAY')} route ({model})",
@@ -76,12 +131,23 @@ class LLMRouter:
             try:
                 res = await self._execute_straight_route(
                     model=model,
-                    messages=messages,
+                    messages=conditioned_messages,
                     temperature=temperature,
-                    max_tokens=max_tokens
+                    max_tokens=effective_max_tokens
                 )
                 res["latency_ms"] = round((time.perf_counter() - start_time) * 1000, 2)
                 res["routing_mode"] = "STRAIGHT"
+
+                # Store in semantic cache
+                semantic_cache.store(
+                    query_text=query_text,
+                    response_content=res.get("content", ""),
+                    model_used=model,
+                    repo_name=repo_name,
+                    tokens_in=res.get("prompt_tokens", 0),
+                    tokens_out=res.get("completion_tokens", 0),
+                    cost_usd=res.get("cost_usd", 0.0)
+                )
 
                 observability_engine.record_event(
                     phase="ROUTER_COMPLETION",
@@ -93,7 +159,7 @@ class LLMRouter:
                 return res
             except Exception as err:
                 logger.warning(f"Straight route failed ({err}). Utilizing deterministic synthesis.")
-                res = self._execute_mock_fallback(model, messages)
+                res = self._execute_mock_fallback(model, conditioned_messages)
                 res["latency_ms"] = round((time.perf_counter() - start_time) * 1000, 2)
                 res["routing_mode"] = "SYNTHESIZED_FALLBACK"
 
@@ -105,6 +171,26 @@ class LLMRouter:
                     payload={"model": model, "error": str(err)}
                 )
                 return res
+
+    def _condition_messages_for_budget(self, messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Appends strict conciseness constraints and suppresses raw thinking dumps if disabled."""
+        conditioned = list(messages)
+        if self.token_budget.concise_documentation_mode and not self.token_budget.stream_thinking:
+            instruction = (
+                "IMPORTANT: Keep your response concise, direct, and action-oriented. "
+                "Do NOT dump raw chain-of-thought or internal monologue. "
+                "Provide brief, clean documentation and valid code diffs without token bloat."
+            )
+            # Prepend or append to system prompt
+            has_system = False
+            for m in conditioned:
+                if m.get("role") == "system":
+                    m["content"] = f"{m['content']}\n\n{instruction}"
+                    has_system = True
+                    break
+            if not has_system:
+                conditioned.insert(0, {"role": "system", "content": instruction})
+        return conditioned
 
     async def _fallback_from_gateway(
         self,

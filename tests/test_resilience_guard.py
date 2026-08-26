@@ -63,3 +63,18 @@ async def test_process_attachments_multimodal():
     assert "Attachment: error.log" in extracted[0]["text"]
     assert extracted[1]["type"] == "image_url"
     assert "data:image/png;base64," in extracted[1]["image_url"]["url"]
+
+
+def test_adaptive_chunk_size_and_gc_reserve():
+    """Validates 75% memory limits and dynamic chunk size reduction under load."""
+    guard = SystemResourceGuard(max_memory_mb=300, gc_reserve_ratio=0.25)
+    assert guard.reserve_bytes == 300 * 1024 * 1024 * 0.25
+
+    # Standard chunk
+    normal_chunk = guard.calculate_adaptive_chunk_size(default_chunk_size=100, item_size_bytes=1000)
+    assert normal_chunk > 0
+
+    # Huge item size (>500KB) scales down chunk size
+    huge_item_chunk = guard.calculate_adaptive_chunk_size(default_chunk_size=100, item_size_bytes=600_000)
+    assert huge_item_chunk <= 20
+

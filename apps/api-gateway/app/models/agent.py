@@ -99,3 +99,113 @@ class TaskExecutionReport(BaseModel):
     traces: List[ExecutionTraceStep] = Field(default_factory=list)
     created_at: float = Field(default_factory=time.time)
     completed_at: Optional[float] = None
+
+
+class ModalityType(str, Enum):
+    TEXT = "text"
+    AUDIO = "audio"
+    VIDEO = "video"
+    IMAGE = "image"
+    MULTIMODAL = "multimodal"
+
+
+class ModelCatalogEntry(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = ""
+    provider: str
+    context_length: int = 128000
+    modalities: List[ModalityType] = Field(default_factory=lambda: [ModalityType.TEXT])
+    is_free: bool = False
+    prompt_cost_per_1m_usd: float = 0.0
+    completion_cost_per_1m_usd: float = 0.0
+    request_cost_usd: float = 0.0
+    image_cost_usd: float = 0.0
+    discount_pct: float = 0.0
+    system_tier: TierLevel = TierLevel.TIER_4_MID_GENERALIST
+    user_override_tier: Optional[TierLevel] = None
+    is_allowed: bool = True
+    tags: List[str] = Field(default_factory=list)
+
+
+class CustomerTierOverrideConfig(BaseModel):
+    allowed_models: Optional[List[str]] = None  # None means all allowed
+    # Shift map: { "model_id": shift_int } where shift_int is between -2 and +2
+    tier_shifts: Dict[str, int] = Field(default_factory=dict)
+    # Explicit per-tier model assignments override: { "tier_1_micro_lint": ["gemini/gemini-2.0-flash-lite"] }
+    tier_model_overrides: Dict[TierLevel, List[str]] = Field(default_factory=dict)
+    prefer_free_models: bool = True
+    allow_multimodal: bool = True
+    updated_at: float = Field(default_factory=time.time)
+
+
+class MultimodalTierSpec(BaseModel):
+    modality: ModalityType
+    tier_name: str
+    tier_level: int
+    description: str
+    representative_models: List[str]
+    cost_per_unit_usd: float
+    unit_description: str  # e.g. "per 1M tokens", "per minute of audio", "per video second", "per image"
+    est_latency_sec: float
+    supported_formats: List[str] = Field(default_factory=list)
+
+
+class SemanticCacheConfig(BaseModel):
+    enabled: bool = True
+    similarity_threshold: float = 0.92
+    ttl_seconds: int = 86400 * 7  # 7 days
+    max_entries: int = 5000
+
+
+class PlaybookAction(str, Enum):
+    AUTO_FIX = "auto_fix"
+    AUTO_COMMENT = "auto_comment"
+    AUTO_PR = "auto_pr"
+    AUTO_MERGE = "auto_merge"
+    NOTIFY_ONLY = "notify_only"
+
+
+class PlaybookConfig(BaseModel):
+    listen_assigned_stories: bool = True
+    listen_issues: bool = True
+    auto_remediate: bool = True
+    auto_comment_on_story: bool = True
+    auto_pr_creation: bool = True
+    auto_merge_enabled: bool = False
+    auto_merge_criteria: Dict[str, Any] = Field(default_factory=lambda: {
+        "require_tests_passed": True,
+        "require_sast_clean": True,
+        "require_review_agent_approval": True,
+        "max_diff_lines": 500
+    })
+    target_repositories: List[str] = Field(default_factory=lambda: ["*"])
+
+
+class PRReviewVerdict(str, Enum):
+    APPROVED = "APPROVED"
+    REQUEST_CHANGES = "REQUEST_CHANGES"
+    COMMENT_ONLY = "COMMENT_ONLY"
+
+
+class PRReviewReport(BaseModel):
+    pr_id: str
+    repo_name: str
+    verdict: PRReviewVerdict
+    score_out_of_100: int
+    security_clean: bool
+    test_coverage_passed: bool
+    summary: str
+    inline_comments: List[Dict[str, Any]] = Field(default_factory=list)
+    suggested_improvements: List[str] = Field(default_factory=list)
+    evaluated_at: float = Field(default_factory=time.time)
+    review_model: str = "deepseek/deepseek-chat"
+
+
+class TokenBudgetConfig(BaseModel):
+    max_output_tokens: int = 1024
+    stream_thinking: bool = False
+    concise_documentation_mode: bool = True
+    engagement_mode: bool = True  # Emits lightweight milestone progress cards
+    prefer_free_models_for_triage: bool = True
+

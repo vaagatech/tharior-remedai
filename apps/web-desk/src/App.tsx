@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   Globe,
   ShieldAlert,
+  Layers,
+  GitPullRequest,
 } from 'lucide-react';
 import { useLiveEvents } from './hooks/useLiveEvents';
 import { DeveloperDashboard } from './components/DeveloperDashboard';
@@ -21,12 +23,14 @@ import { CostAnalytics } from './components/CostAnalytics';
 import { ObservabilityDesk } from './components/ObservabilityDesk';
 import { BrowserPreviewDesk } from './components/BrowserPreviewDesk';
 import { SecuritySASTDesk } from './components/SecuritySASTDesk';
+import { ModelCatalogDesk } from './components/ModelCatalogDesk';
+import { PlaybookReviewDesk } from './components/PlaybookReviewDesk';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import type { TaskExecutionReport } from './types';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'clarifications' | 'a2a' | 'simulator' | 'sandbox' | 'analytics' | 'observability' | 'browser' | 'sast'
+    'overview' | 'clarifications' | 'models' | 'playbooks' | 'a2a' | 'simulator' | 'sandbox' | 'analytics' | 'observability' | 'browser' | 'sast'
   >('overview');
 
   const [selectedReport, setSelectedReport] = useState<TaskExecutionReport | null>(null);
@@ -118,6 +122,30 @@ export function App() {
           >
             <Activity className="w-3.5 h-3.5" />
             <span>Overview</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('models')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'models'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Model Catalog & Tiers</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('playbooks')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'playbooks'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            }`}
+          >
+            <GitPullRequest className="w-3.5 h-3.5 text-amber-400" />
+            <span>Playbooks & PR Reviewer</span>
           </button>
 
           <button
@@ -232,6 +260,14 @@ export function App() {
               onSelectReport={handleSelectReport}
               onNavigateTab={(tab) => setActiveTab(tab)}
             />
+          )}
+
+          {activeTab === 'models' && (
+            <ModelCatalogDesk />
+          )}
+
+          {activeTab === 'playbooks' && (
+            <PlaybookReviewDesk />
           )}
 
           {activeTab === 'clarifications' && (

@@ -22,12 +22,23 @@ from app.models.clarification import (
     ClarificationSession,
     ClarificationAnswerRequest
 )
-from app.models.agent import AgentCard, TaskExecutionReport, TierLevel, ModelTierSpec
+from app.models.agent import (
+    AgentCard,
+    TaskExecutionReport,
+    TierLevel,
+    ModelTierSpec,
+    CustomerTierOverrideConfig,
+    MultimodalTierSpec,
+    ModelCatalogEntry,
+    PlaybookConfig,
+    PRReviewReport,
+    TokenBudgetConfig
+)
 from app.models.agent_comparison import agent_comparison_engine, AgentBenchmarkProfile, FeatureRoadmapItem
 from app.core.resilience_guard import resource_guard
 from app.core.event_bus import event_bus
 from app.core.session_sandbox import sandbox_manager
-from app.core.auth import cognito_service, get_current_user, CognitoUser, LoginRequest, AuthTokenResponse
+from app.core.auth import cognito_service, get_current_user, require_admin_role, CognitoUser, LoginRequest, AuthTokenResponse
 from app.core.circuit_breaker import circuit_breakers
 from app.core.telemetry_replay import observability_engine, DeadLetterRecord
 from app.core.branch_operator import branch_operator, RemediationBranch
@@ -38,6 +49,10 @@ from app.services.a2a_dispatcher import a2a_dispatcher
 from app.services.anvesh_client import anvesh_client
 from app.services.llm_pricing_service import llm_pricing_service
 from app.services.llm_router import llm_router
+from app.services.semantic_cache import semantic_cache
+from app.services.internet_search_plugin import internet_search_plugin
+from app.services.playbook_engine import playbook_engine, StoryWebhookEvent, PlaybookExecutionResult
+from app.services.pr_review_agent import pr_review_agent
 from app.services.background_sast_watcher import sast_watcher, SASTScanReport
 from app.services.consensus_engine import consensus_engine, ConsensusResolution
 from app.mcp.client import MCPClient
@@ -115,7 +130,7 @@ async def get_me(user: CognitoUser = Depends(get_current_user)):
     return user
 
 
-# --- 10-TIER LLM PRICING & ROUTING ---
+# --- OPENROUTER DYNAMIC MODEL CATALOG & 10-TIER ROUTING ---
 
 @app.get("/api/v1/models/tiers", response_model=List[ModelTierSpec])
 async def get_model_tiers():
@@ -123,27 +138,218 @@ async def get_model_tiers():
     return llm_pricing_service.get_all_tiers()
 
 
+@app.get("/api/v1/models/catalog")
+async def get_model_catalog(
+    search: Optional[str] = None,
+    free_only: bool = False,
+    modality: Optional[str] = None,
+    provider: Optional[str] = None,
+    tier: Optional[TierLevel] = None,
+    allowed_only: bool = False,
+    limit: int = 100,
+    offset: int = 0
+):
+    """Returns live OpenRouter model catalog with multi-filter and free tier support."""
+    return llm_pricing_service.get_catalog_models(
+        search=search,
+        free_only=free_only,
+        modality=modality,
+        provider=provider,
+        tier=tier,
+        allowed_only=allowed_only,
+        limit=limit,
+        offset=offset
+    )
+
+
+@app.get("/api/v1/models/config")
+async def get_model_registry_config():
+    """Returns source URL, weekly refresh interval, and cache status."""
+    return llm_pricing_service.get_config()
+
+
+class ModelRegistryConfigRequest(BaseModel):
+    source_url: Optional[str] = None
+    api_key: Optional[str] = None
+    cache_ttl_seconds: Optional[int] = None
+
+
+@app.post("/api/v1/models/config")
+async def update_model_registry_config(
+    req: ModelRegistryConfigRequest,
+    user: CognitoUser = Depends(require_admin_role)
+):
+    """Updates OpenRouter source URL, API key, or weekly refresh interval. Restricted by RBAC."""
+    return llm_pricing_service.update_config(
+        source_url=req.source_url,
+        api_key=req.api_key,
+        cache_ttl_seconds=req.cache_ttl_seconds
+    )
+
+
 @app.post("/api/v1/models/refresh-pricing")
-async def refresh_model_pricing(force: bool = Query(default=True)):
-    """Fetches live pricing from OpenRouter API and updates 10-tier matrix in Anvesh."""
+async def refresh_model_pricing(
+    force: bool = Query(default=True),
+    user: CognitoUser = Depends(require_admin_role)
+):
+    """Fetches live pricing from OpenRouter API and updates 10-tier matrix in Anvesh. Restricted by RBAC."""
     return await llm_pricing_service.fetch_and_update_pricing(force=force)
+
+
+@app.get("/api/v1/models/customer-override", response_model=CustomerTierOverrideConfig)
+async def get_customer_tier_overrides():
+    """Returns current customer tier override settings and allowed model whitelist."""
+    return llm_pricing_service.get_customer_config()
+
+
+@app.post("/api/v1/models/customer-override")
+async def set_customer_tier_overrides(
+    config: CustomerTierOverrideConfig,
+    user: CognitoUser = Depends(require_admin_role)
+):
+    """Applies customer tier overrides (±1 to ±2 tiers shift) and allowed model whitelist. Restricted by RBAC."""
+    return llm_pricing_service.apply_customer_override(config)
+
+
+@app.get("/api/v1/models/multimodal-tiers", response_model=List[MultimodalTierSpec])
+async def get_multimodal_tiers():
+    """Returns specialized tier specifications for Audio, Video, Image, and Document assets."""
+    return llm_pricing_service.get_multimodal_tiers()
 
 
 class RouteTestRequest(BaseModel):
     model: str = "openai/gpt-4o"
     prompt: str = "What is the meaning of life?"
     routing_mode: Optional[str] = "GATEWAY"
+    bypass_cache: bool = False
 
 
 @app.post("/api/v1/models/route-test")
 async def test_llm_route(req: RouteTestRequest, user: CognitoUser = Depends(get_current_user)):
-    """Executes LLM chat completion via Straight Route or Gateway Route."""
+    """Executes LLM chat completion via Straight Route or Gateway Route with Semantic Caching."""
     messages = [{"role": "user", "content": req.prompt}]
     return await llm_router.chat_completion(
         model=req.model,
         messages=messages,
-        routing_mode=req.routing_mode
+        routing_mode=req.routing_mode,
+        bypass_cache=req.bypass_cache
     )
+
+
+# --- SEMANTIC CACHING ENGINE ---
+
+@app.get("/api/v1/cache/stats")
+async def get_semantic_cache_stats():
+    """Returns semantic cache metrics, hit rates, and token/USD cost savings."""
+    return semantic_cache.get_stats()
+
+
+class CacheConfigRequest(BaseModel):
+    enabled: Optional[bool] = None
+    similarity_threshold: Optional[float] = None
+    ttl_seconds: Optional[int] = None
+
+
+@app.post("/api/v1/cache/config")
+async def update_semantic_cache_config(req: CacheConfigRequest):
+    """Updates semantic cache enabled state and similarity threshold."""
+    return semantic_cache.update_config(
+        enabled=req.enabled,
+        threshold=req.similarity_threshold,
+        ttl_seconds=req.ttl_seconds
+    )
+
+
+@app.post("/api/v1/cache/clear")
+async def clear_semantic_cache():
+    """Clears all cached entries from memory and Anvesh Unified Storage."""
+    semantic_cache.clear()
+    return {"status": "CLEARED", "active_cached_entries": 0}
+
+
+# --- INTERNET SEARCH TOOL PLUGIN ---
+
+class SearchQueryRequest(BaseModel):
+    query: str
+    max_results: Optional[int] = 5
+
+
+@app.post("/api/v1/tools/search")
+async def search_internet(req: SearchQueryRequest):
+    """Searches live documentation and web references for coding agents."""
+    return await internet_search_plugin.search(query=req.query, max_results=req.max_results)
+
+
+class SearchToggleRequest(BaseModel):
+    enabled: bool
+
+
+@app.post("/api/v1/tools/search/toggle")
+async def toggle_internet_search(req: SearchToggleRequest):
+    """Enables or disables the internet search tool plugin."""
+    return internet_search_plugin.set_enabled(req.enabled)
+
+
+# --- AUTOMATION PLAYBOOKS & PR REVIEW AGENT ---
+
+@app.get("/api/v1/playbooks/config", response_model=PlaybookConfig)
+async def get_playbook_config():
+    """Returns active playbook automation settings (issue listeners, auto-merge policies)."""
+    return playbook_engine.get_config()
+
+
+@app.post("/api/v1/playbooks/config", response_model=PlaybookConfig)
+async def update_playbook_config(cfg: PlaybookConfig):
+    """Updates playbook automation settings."""
+    return playbook_engine.update_config(cfg)
+
+
+@app.post("/api/v1/playbooks/story-webhook", response_model=PlaybookExecutionResult)
+async def handle_assigned_story_webhook(event: StoryWebhookEvent):
+    """WebHook listener for assigned issues/stories: auto-fixes, comments, reviews, and conditionally merges."""
+    return await playbook_engine.handle_story_assignment(event)
+
+
+@app.get("/api/v1/playbooks/history")
+async def get_playbook_history():
+    """Returns execution history of automated story remediations."""
+    return playbook_engine.get_history()
+
+
+class PRReviewRequest(BaseModel):
+    pr_id: str
+    repo_name: str
+    title: str
+    description: str
+    patch_diff: str
+    model_override: Optional[str] = None
+
+
+@app.post("/api/v1/playbooks/review-pr", response_model=PRReviewReport)
+async def review_pull_request(req: PRReviewRequest):
+    """Invokes PR Review Agent to evaluate diffs, security cleanliness, and approve/request changes."""
+    return await pr_review_agent.review_pr(
+        pr_id=req.pr_id,
+        repo_name=req.repo_name,
+        title=req.title,
+        description=req.description,
+        patch_diff=req.patch_diff,
+        model_override=req.model_override
+    )
+
+
+# --- TOKEN BUDGET & THINKING STREAM CONTROL ---
+
+@app.get("/api/v1/tokens/budget", response_model=TokenBudgetConfig)
+async def get_token_budget_config():
+    """Returns current token budget and thinking stream configuration."""
+    return llm_router.get_token_budget()
+
+
+@app.post("/api/v1/tokens/budget", response_model=TokenBudgetConfig)
+async def update_token_budget_config(cfg: TokenBudgetConfig):
+    """Updates output token budget and thinking stream suppression mode."""
+    return llm_router.update_token_budget(cfg)
 
 
 # --- KEDA OPERATOR & AUTOSCALING CONTROLLER ---

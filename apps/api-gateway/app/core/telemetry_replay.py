@@ -100,6 +100,10 @@ class ObservabilityEngine:
 
         self._events_ring_buffer.append(evt)
         self._total_cost_usd += cost_usd
+        if payload:
+            tokens_in = payload.get("tokens_in", 0) or 0
+            tokens_out = payload.get("tokens_out", 0) or 0
+            self._total_tokens_consumed += (tokens_in + tokens_out)
 
         # Asynchronously or non-blockingly persist critical/error events to Anvesh
         if severity in ("WARN", "ERROR", "CRITICAL"):

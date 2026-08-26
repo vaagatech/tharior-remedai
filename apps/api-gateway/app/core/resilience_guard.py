@@ -25,13 +25,38 @@ class SystemResourceGuard:
     and manages proactive garbage collection reserves.
     """
 
-    def __init__(self, max_memory_mb: int = 300, gc_reserve_ratio: float = 0.20):
+    def __init__(self, max_memory_mb: int = 300, gc_reserve_ratio: float = 0.25):
         self.max_memory_mb = max_memory_mb
         self.max_memory_bytes = max_memory_mb * 1024 * 1024
-        self.reserve_bytes = self.max_memory_bytes * gc_reserve_ratio
+        self.reserve_bytes = self.max_memory_bytes * gc_reserve_ratio  # 25% reserve headroom
         self.process = psutil.Process(os.getpid())
         self._watcher_task: Optional[asyncio.Task] = None
         self._apply_os_limits()
+
+    def calculate_adaptive_chunk_size(self, default_chunk_size: int = 100, item_size_bytes: int = 1024) -> int:
+        """
+        Dynamically calculates safe batch chunk size based on real-time memory & CPU load.
+        If system memory exceeds 75%, chunk size is reduced to protect GC headroom.
+        """
+        metrics = self.get_metrics()
+        usage_pct = metrics.get("usage_percent", 0.0)
+
+        # Scale down chunk size if individual items are large or if memory usage is elevated
+        size_factor = 1.0
+        if item_size_bytes > 500_000:  # > 500KB per item
+            size_factor = 0.2
+        elif item_size_bytes > 100_000:  # > 100KB per item
+            size_factor = 0.5
+
+        if usage_pct >= 75.0:
+            # Under high load: drop chunk size to 25% and trigger proactive GC
+            self.collect()
+            return max(1, int(default_chunk_size * 0.25 * size_factor))
+        elif usage_pct >= 60.0:
+            # Under moderate load: drop chunk size to 50%
+            return max(1, int(default_chunk_size * 0.50 * size_factor))
+
+        return max(1, int(default_chunk_size * size_factor))
 
     def _apply_os_limits(self):
         """Attempts to set OS-level address space limit (RLIMIT_AS)."""
@@ -120,7 +145,7 @@ class SystemResourceGuard:
 
 
 # Singleton instance shared across the application
-resource_guard = SystemResourceGuard(max_memory_mb=300, gc_reserve_ratio=0.20)
+resource_guard = SystemResourceGuard(max_memory_mb=300, gc_reserve_ratio=0.25)
 
 
 class EphemeralAttachmentManager:

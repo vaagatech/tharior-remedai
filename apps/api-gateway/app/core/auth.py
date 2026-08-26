@@ -185,3 +185,18 @@ async def get_current_user(
     current_user_id.set(user.user_id)
 
     return user
+
+
+async def require_admin_role(
+    user: CognitoUser = Depends(get_current_user)
+) -> CognitoUser:
+    """Enforces RBAC authorization: requires admin, system_admin, or agent-operators role."""
+    allowed_roles = {"admin", "system_admin", "agent-operators", "platform_admin"}
+    user_roles_lower = {r.lower() for r in user.roles}
+    if not user_roles_lower.intersection(allowed_roles):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Admin or Agent-Operator role required to configure model registry or trigger manual refresh."
+        )
+    return user
+

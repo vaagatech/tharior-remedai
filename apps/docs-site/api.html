@@ -131,6 +131,116 @@
           </tbody>
         </table>
       </div>
+
+      <h2 id="model-catalog-endpoints">3. OpenRouter Model Registry & Tier Overrides</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/models/catalog</code></td>
+              <td>Lists all models from OpenRouter with search, modality, and free-tier filtering.</td>
+            </tr>
+            <tr>
+              <td><code>GET</code> / <code>POST</code></td>
+              <td><code>/api/v1/models/config</code></td>
+              <td>Retrieves or updates catalog source URL, API key, and weekly refresh schedule.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/models/refresh-pricing</code></td>
+              <td>Forces an on-demand live synchronization from OpenRouter API.</td>
+            </tr>
+            <tr>
+              <td><code>GET</code> / <code>POST</code></td>
+              <td><code>/api/v1/models/customer-override</code></td>
+              <td>Gets or sets customer model whitelists and ±1 to ±2 tier shifts.</td>
+            </tr>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/models/multimodal-tiers</code></td>
+              <td>Returns distinct tier specifications for Audio, Video, Image, and Document models.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="semantic-cache-endpoints">4. Semantic Caching & Web Search Tools</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GET</code></td>
+              <td><code>/api/v1/cache/stats</code></td>
+              <td>Returns cache hit rate, token savings count, and dollar cost savings.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/cache/clear</code></td>
+              <td>Flushes all semantic cache records from memory and Anvesh storage.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/tools/search</code></td>
+              <td>Searches live internet documentation and API specs for coding agents.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/tools/search/toggle</code></td>
+              <td>Enables or disables the internet search tool plugin dynamically.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="playbook-endpoints">5. Automation Playbooks & PR Review Agent</h2>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/playbooks/story-webhook</code></td>
+              <td>Ingests assigned story events (Jira/GitHub), auto-fixes, comments, and auto-merges.</td>
+            </tr>
+            <tr>
+              <td><code>GET</code> / <code>POST</code></td>
+              <td><code>/api/v1/playbooks/config</code></td>
+              <td>Configures issue listener rules, auto-commenting, and auto-merge criteria.</td>
+            </tr>
+            <tr>
+              <td><code>POST</code></td>
+              <td><code>/api/v1/playbooks/review-pr</code></td>
+              <td>Invokes Sentinel PR Review Agent to evaluate diffs, security, and emit review verdicts.</td>
+            </tr>
+            <tr>
+              <td><code>GET</code> / <code>POST</code></td>
+              <td><code>/api/v1/tokens/budget</code></td>
+              <td>Configures max output tokens, stream thinking suppression, and engagement mode.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </main>
 
     <aside class="toc-panel">
@@ -138,6 +248,9 @@
       <ul class="toc-links">
         <li class="toc-item"><a class="toc-link" href="#ingestion">Issue Ingestion</a></li>
         <li class="toc-item"><a class="toc-link" href="#observability-endpoints">Observability & DLQ</a></li>
+        <li class="toc-item"><a class="toc-link" href="#model-catalog-endpoints">Model Catalog & Tiers</a></li>
+        <li class="toc-item"><a class="toc-link" href="#semantic-cache-endpoints">Semantic Cache & Search</a></li>
+        <li class="toc-item"><a class="toc-link" href="#playbook-endpoints">Playbooks & PR Reviewer</a></li>
       </ul>
     </aside>
   </div>

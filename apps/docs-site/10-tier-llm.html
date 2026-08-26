@@ -203,11 +203,82 @@
         <li><strong>Architecture & Consensus</strong> (Tiers 8, 10): Zero-downtime database migrations, microservice interface refactoring, and financial kernels. <code>claude-3.7-sonnet</code> with hybrid extended thinking and multi-model consensus voting ensure absolute correctness.</li>
       </ul>
 
-      <h2 id="weekly-sync">3. Automated Weekly Pricing Synchronization</h2>
+      <h2 id="weekly-sync">3. Automated Weekly Ingestion & OpenRouter Model Catalog</h2>
       <p>
-        Tharior Remedai queries live model catalogs from OpenRouter every 7 days (or on-demand via <code>POST /api/v1/models/refresh-pricing</code>), 
-        re-evaluates price-to-performance indices, and persists the updated matrix into <strong>Anvesh Document Storage</strong>.
+        Tharior Remedai synchronizes with the dynamic <strong>OpenRouter API (<code>https://openrouter.ai/models</code> / <code>/api/v1/models</code>)</strong> every 7 days (or on-demand via <code>POST /api/v1/models/refresh-pricing</code>).
+        The service extracts real-time prompt/completion costs, discounts, context windows, and actively prioritizes <strong>Free Models</strong> (e.g., <code>llama-3.2-3b-instruct:free</code>, <code>gemini-2.0-flash-lite:free</code>, <code>deepseek-chat:free</code>) for non-critical formatting, triage, and linting.
       </p>
+
+      <h2 id="customer-overrides">4. Customer Tier Overrides (±1 to ±2 Tiers Shift)</h2>
+      <p>
+        While Tharior Remedai applies intelligent baseline tiering, customers can customize model assignments:
+      </p>
+      <ul>
+        <li><strong>Allowed Model Whitelist:</strong> Restrict which models your organization permits.</li>
+        <li><strong>Controlled Tier Shifts (±1 or ±2 Tiers):</strong> Shift individual models up or down by 1 or 2 tiers to balance cost vs capability preferences. Shifts exceeding ±2 tiers are safely clamped to maintain system stability.</li>
+        <li><strong>Per-Tier Model Selection:</strong> Explicitly choose representative models per tier or fallback to system defaults.</li>
+      </ul>
+
+      <h2 id="multimodal-tiers">5. Multimodal Tiering (Audio, Video, Image & Assets)</h2>
+      <p>
+        Beyond text code remediation, Tharior Remedai provides distinct multimodal tiers for rich technical assets:
+      </p>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Modality</th>
+              <th>Tier</th>
+              <th>Representative Engines</th>
+              <th>Unit Cost</th>
+              <th>Target Capabilities</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Audio</strong></td>
+              <td>Audio Tier 1-2</td>
+              <td><code>whisper-large-v3</code>, <code>elevenlabs/multilingual-v2</code></td>
+              <td>$0.006 - $0.030 / min</td>
+              <td>Voice narration, real-time command streaming, meeting transcripts</td>
+            </tr>
+            <tr>
+              <td><strong>Video</strong></td>
+              <td>Video Tier 1-2</td>
+              <td><code>gemini-2.0-flash</code>, <code>runway/gen-3-alpha</code>, <code>kling-v1.5</code></td>
+              <td>$0.002 - $0.080 / sec</td>
+              <td>UI video test regression audits, feature walkthrough videos</td>
+            </tr>
+            <tr>
+              <td><strong>Image</strong></td>
+              <td>Image Tier 1-2</td>
+              <td><code>flux-1-schnell</code>, <code>imagen-3-fast</code>, <code>dall-e-3</code></td>
+              <td>$0.003 - $0.040 / img</td>
+              <td>System architecture diagrams, UI mockups, slide decks</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="semantic-cache">6. Semantic Caching & Internet Search Plugin</h2>
+      <p>
+        To prevent redundant LLM invocations and slash token expenditure:
+      </p>
+      <ul>
+        <li><strong>Semantic Caching:</strong> Uses term vector cosine similarity (&gt; 0.92) to match incoming user queries with previously verified remediations, returning instant solutions with 0 upstream API cost.</li>
+        <li><strong>Internet Search Plugin:</strong> Modular, toggleable web search tool allowing agents to query live documentation, API specs, and CVE advisories with concise summaries.</li>
+      </ul>
+
+      <h2 id="playbooks-review">7. Automation Playbooks & Sentinel PR Review Agent</h2>
+      <p>
+        Enterprise automation playbooks streamline the end-to-end bug remediation lifecycle:
+      </p>
+      <ul>
+        <li><strong>Issue & Story Listener:</strong> Ingests Jira, GitHub, or Linear webhook events for stories assigned directly to the agent.</li>
+        <li><strong>Auto-Remediation & Commenting:</strong> Fixes bugs, executes sandbox tests, and automatically comments structured resolution details on the story.</li>
+        <li><strong>PR Review Agent & Auto-Merge:</strong> Sentinel Review Agent audits PR diffs, assigns quality scores (out of 100), checks SAST security, and conditionally auto-merges when all criteria are satisfied.</li>
+        <li><strong>Token Budget & Output Controls:</strong> Hardened system prompts prevent verbose internal monologue dumping, keeping token usage strictly bounded.</li>
+      </ul>
     </main>
 
     <aside class="toc-panel">
@@ -216,6 +287,10 @@
         <li class="toc-item"><a class="toc-link" href="#specialization-matrix">Specialization Matrix</a></li>
         <li class="toc-item"><a class="toc-link" href="#knowledge-vs-reasoning">Knowledge vs Reasoning</a></li>
         <li class="toc-item"><a class="toc-link" href="#weekly-sync">Weekly Pricing Sync</a></li>
+        <li class="toc-item"><a class="toc-link" href="#customer-overrides">Customer Overrides (±1/2)</a></li>
+        <li class="toc-item"><a class="toc-link" href="#multimodal-tiers">Multimodal Tiers</a></li>
+        <li class="toc-item"><a class="toc-link" href="#semantic-cache">Semantic Cache & Search</a></li>
+        <li class="toc-item"><a class="toc-link" href="#playbooks-review">Playbooks & PR Reviewer</a></li>
       </ul>
     </aside>
   </div>
