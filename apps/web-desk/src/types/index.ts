@@ -132,7 +132,7 @@ export interface SystemRoutingDecision {
   ast_features_detected: string[];
 }
 
-export type GitAuthMethod = 'github_app' | 'federated_oauth' | 'encrypted_pat' | 'ssh_key';
+export type GitAuthMethod = 'github_app' | 'federated_oauth' | 'encrypted_pat' | 'ssh_key' | 'ssh_deploy_key';
 
 export interface RepoAuthConfig {
   method: GitAuthMethod;
@@ -313,4 +313,33 @@ export interface AgentCard {
   role: string;
   status: 'IDLE' | 'BUSY' | 'PAUSED';
   current_task?: string;
+}
+
+export interface DeadLetterRecord {
+  id: string;
+  source: 'indexing' | 'routing' | 'remediation' | 'api_sync' | 'websocket';
+  entity_id: string;
+  entity_type: string;
+  error_message: string;
+  error_stack?: string;
+  payload: any;
+  retry_count: number;
+  max_retries: number;
+  status: 'PENDING_RETRY' | 'REPLAYING' | 'RESOLVED' | 'DISCARDED';
+  timestamp: string;
+  memory_at_failure_mb?: number;
+  cpu_at_failure_pct?: number;
+}
+
+export interface TelemetryLogEntry {
+  id: string;
+  timestamp: string;
+  category: 'ROUTER' | 'AST_INDEXER' | 'STUDIO' | 'PR_AGENT' | 'SYSTEM' | 'SECURITY';
+  event_name: string;
+  details: string;
+  duration_ms?: number;
+  memory_pct: number;
+  cpu_pct: number;
+  trace_id: string;
+  status: 'SUCCESS' | 'WARNING' | 'ERROR';
 }

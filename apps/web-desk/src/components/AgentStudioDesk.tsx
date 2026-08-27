@@ -3,12 +3,15 @@ import {
   Bot,
   Sparkles,
   Play,
-  CheckCircle2,
   Code2,
   Terminal,
   Cpu,
   RotateCw,
   FolderGit2,
+  Network,
+  GitPullRequest,
+  ListTodo,
+  Zap,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
 import { apiFetch } from '../config/api';
@@ -16,15 +19,15 @@ import { apiFetch } from '../config/api';
 export const AgentStudioDesk: React.FC = () => {
   const {
     activeRepo,
+    studioPrompt,
+    setStudioPrompt,
     lastRoutingDecision,
     evaluateSystemRouting,
     addLiveEvent,
     setActiveTab,
+    addBacklogStory,
   } = useRemedaiStore();
 
-  const [prompt, setPrompt] = useState(
-    'Refactor Redis distributed cache lock in apps/api-gateway/app/main.py to prevent orphaned TTL locks during high concurrency spikes.'
-  );
   const [selectedAgentRole, setSelectedAgentRole] = useState<'coder' | 'architect' | 'security' | 'reviewer'>('coder');
   const [reflectionEnabled, setReflectionEnabled] = useState(true);
   const [internetSearchEnabled, setInternetSearchEnabled] = useState(false);
@@ -36,20 +39,20 @@ export const AgentStudioDesk: React.FC = () => {
 
   // Auto-evaluate system routing as user types prompt
   useEffect(() => {
-    if (prompt.trim().length > 10) {
-      evaluateSystemRouting(prompt, activeRepo?.name);
+    if (studioPrompt.trim().length > 10) {
+      evaluateSystemRouting(studioPrompt, activeRepo?.name);
     }
-  }, [prompt, activeRepo]);
+  }, [studioPrompt, activeRepo?.id]);
 
   const handleRunAgent = async () => {
-    if (!prompt.trim()) return;
+    if (!studioPrompt.trim()) return;
 
     setIsExecuting(true);
     setExecutionLogs([]);
     setGeneratedDiff(null);
     setReflectionThoughts([]);
 
-    const decision = await evaluateSystemRouting(prompt, activeRepo?.name);
+    const decision = await evaluateSystemRouting(studioPrompt, activeRepo?.name);
 
     addLiveEvent({
       type: 'AGENT_DISPATCH',
@@ -79,7 +82,7 @@ export const AgentStudioDesk: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           model: decision.recommended_model_id,
-          prompt: `Role: ${selectedAgentRole}. Target Repo: ${activeRepo?.name}. Task: ${prompt}`,
+          prompt: `Role: ${selectedAgentRole}. Target Repo: ${activeRepo?.name}. Task: ${studioPrompt}`,
           routing_mode: 'GATEWAY',
           bypass_cache: false,
         }),
@@ -162,6 +165,22 @@ index a12b4cd..e45f678 100644
     }
   };
 
+  const handleSaveToBacklog = () => {
+    addBacklogStory({
+      source: 'github',
+      key: `REM-${Math.floor(100 + Math.random() * 900)}`,
+      title: studioPrompt.slice(0, 60),
+      description: studioPrompt,
+      repo: activeRepo?.name || 'vaagatech/tharior-remedai',
+      branch: activeRepo?.default_branch || 'main',
+      priority: lastRoutingDecision && lastRoutingDecision.complexity_score > 7 ? 'CRITICAL' : 'HIGH',
+      status: 'BACKLOG',
+      tier_needed: lastRoutingDecision?.recommended_tier || 'tier_7_deep_reasoner',
+      estimated_cost_usd: 0.0055,
+    });
+    setActiveTab('backlog');
+  };
+
   return (
     <div className="p-8 space-y-6 max-w-7xl mx-auto">
       {/* Top Banner */}
@@ -178,7 +197,15 @@ index a12b4cd..e45f678 100644
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setActiveTab('knowledge-graph')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
+          >
+            <Network className="w-3.5 h-3.5 text-indigo-600" />
+            <span>AST Knowledge Graph</span>
+          </button>
+
           <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center gap-2">
             <FolderGit2 className="w-4 h-4 text-indigo-600" />
             <span className="text-slate-600">Active Repo: <strong className="text-slate-900">{activeRepo?.name || 'tharior-remedai'}</strong></span>
@@ -191,12 +218,13 @@ index a12b4cd..e45f678 100644
         <div className="bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/70 border border-indigo-100 rounded-2xl p-5 shadow-sm space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100/60 pb-3">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-indigo-600 text-white rounded-lg">
+              <div className="p-1.5 bg-indigo-600 text-white rounded-lg shadow-2xs">
                 <Cpu className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
-                  Autonomous System Routing Decision (System Controlled)
+                <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Zap className="w-3 h-3 text-indigo-600 fill-indigo-600" />
+                  <span>Autonomous System Intelligent Routing (System Controlled)</span>
                 </div>
                 <div className="text-sm font-bold text-slate-900">
                   {lastRoutingDecision.recommended_tier_name}
@@ -204,14 +232,14 @@ index a12b4cd..e45f678 100644
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-white border border-indigo-200 text-indigo-700 rounded-full text-xs font-semibold shadow-2xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3 py-1 bg-white border border-indigo-200 text-indigo-700 rounded-full text-xs font-bold shadow-2xs">
                 Model: {lastRoutingDecision.recommended_model_name}
               </span>
-              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-medium">
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-semibold">
                 Complexity: {lastRoutingDecision.complexity_score}/10
               </span>
-              <span className="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-xs font-medium">
+              <span className="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-xs font-semibold">
                 Confidence: {lastRoutingDecision.confidence_score.toFixed(1)}%
               </span>
             </div>
@@ -230,7 +258,7 @@ index a12b4cd..e45f678 100644
               </span>
             ))}
             <span className="ml-auto text-[11px] text-slate-500">
-              Estimated Budget Impact: <strong className="text-slate-800 font-mono">{lastRoutingDecision.budget_impact}</strong>
+              Estimated Budget Impact: <strong className="text-slate-800 font-mono font-bold">{lastRoutingDecision.budget_impact}</strong>
             </span>
           </div>
         </div>
@@ -247,8 +275,8 @@ index a12b4cd..e45f678 100644
               </label>
               <textarea
                 rows={5}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                value={studioPrompt}
+                onChange={(e) => setStudioPrompt(e.target.value)}
                 placeholder="Describe your bug fix, feature, refactoring, or AST transform requirement in detail..."
                 className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white leading-relaxed font-sans"
               />
@@ -272,7 +300,7 @@ index a12b4cd..e45f678 100644
                     onClick={() => setSelectedAgentRole(role.id as any)}
                     className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       selectedAgentRole === role.id
-                        ? 'bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-500/20'
+                        ? 'bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs'
                         : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
@@ -320,7 +348,7 @@ index a12b4cd..e45f678 100644
             <div className="pt-2">
               <button
                 onClick={handleRunAgent}
-                disabled={isExecuting || !prompt.trim()}
+                disabled={isExecuting || !studioPrompt.trim()}
                 className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer text-sm"
               >
                 {isExecuting ? (
@@ -331,14 +359,14 @@ index a12b4cd..e45f678 100644
                 ) : (
                   <>
                     <Play className="w-4 h-4 fill-white" />
-                    Dispatch Autonomous Agent (System Routed)
+                    Dispatch Autonomous Agent ({lastRoutingDecision?.recommended_model_name || 'System Auto-Selected'})
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* Generated Code Diff Viewer */}
+          {/* Generated Code Diff Viewer & Cross-Desk Continuity */}
           {generatedDiff && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -355,21 +383,40 @@ index a12b4cd..e45f678 100644
                 {generatedDiff}
               </pre>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
+              {/* Seamless Cross-Desk Action Handover */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveToBacklog}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  >
+                    <ListTodo className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Save to Issue Backlog</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('knowledge-graph')}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  >
+                    <Network className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Inspect Impact in Graph</span>
+                  </button>
+                </div>
+
                 <button
                   onClick={() => {
                     addLiveEvent({
                       type: 'PR_REVIEW',
                       title: 'Pull Request Created from Studio Patch',
-                      description: 'Opened automated PR #91 on vaagatech/tharior-remedai for review.',
+                      description: `Opened automated PR for ${activeRepo?.name || 'tharior-remedai'}.`,
                       severity: 'success',
                     });
                     setActiveTab('pr-review');
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer shadow-sm"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Apply Patch & Open PR
+                  <GitPullRequest className="w-4 h-4" />
+                  <span>Apply Patch & Open in PR Review Desk</span>
                 </button>
               </div>
             </div>

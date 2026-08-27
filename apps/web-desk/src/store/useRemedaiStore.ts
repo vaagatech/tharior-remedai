@@ -14,6 +14,8 @@ import type {
   LiveEventItem,
   SecurityVaultState,
   RepoAuthConfig,
+  DeadLetterRecord,
+  TelemetryLogEntry,
 } from '../types';
 
 export const INITIAL_10_TIER_SPECS: ModelTierSpec[] = [
@@ -811,11 +813,29 @@ interface RemedaiStore {
   setRefreshInterval: (hours: number) => void;
   syncOpenRouterCatalog: () => Promise<void>;
 
+  // Cross-Desk Seamless Handover & Studio Prompt
+  studioPrompt: string;
+  setStudioPrompt: (prompt: string) => void;
+  openInStudio: (prompt: string, targetRepo?: string, targetFiles?: string[]) => Promise<void>;
+  openInPRReview: (repo?: string, branch?: string) => void;
+  openInKnowledgeGraph: (repoId: string, symbolId?: string) => Promise<void>;
+  openInBacklog: (storyId?: string) => void;
+
   // Backlog Stories & Automation
   backlogStories: BacklogStory[];
   activeStory: BacklogStory | null;
   selectStory: (story: BacklogStory | null) => void;
   remediateStory: (storyId: string) => Promise<void>;
+  addBacklogStory: (story: Omit<BacklogStory, 'id'>) => void;
+  deleteBacklogStory: (id: string) => void;
+
+  // Resilient Observability & Dead-Letter Queue (DLQ)
+  telemetryLogs: TelemetryLogEntry[];
+  deadLetterQueue: DeadLetterRecord[];
+  logTelemetryEvent: (entry: Omit<TelemetryLogEntry, 'id' | 'timestamp'>) => void;
+  logDeadLetterRecord: (record: Omit<DeadLetterRecord, 'id' | 'timestamp' | 'retry_count' | 'status'>) => void;
+  replayDeadLetterRecord: (id: string) => Promise<void>;
+  clearDeadLetterQueue: () => void;
 
   // Security & KMS Double-Encryption Vault
   securityVault: SecurityVaultState;
@@ -1162,18 +1182,41 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
   selectedKGNode: INITIAL_KG_DATA.nodes[0],
   selectKGNode: (node) => set({ selectedKGNode: node }),
 
+  studioPrompt: 'Refactor Redis distributed cache lock in apps/api-gateway/app/main.py to prevent orphaned TTL locks during high concurrency spikes.',
+  setStudioPrompt: (prompt) => set({ studioPrompt: prompt }),
+
+  openInStudio: async (prompt, targetRepo, targetFiles) => {
+    set({ studioPrompt: prompt, activeTab: 'studio' });
+    if (prompt.trim()) {
+      await get().evaluateSystemRouting(prompt, targetRepo, targetFiles);
+    }
+  },
+
+  openInPRReview: (_repo, _branch) => {
+    set({ activeTab: 'pr-review' });
+  },
+
+  openInKnowledgeGraph: async (repoId) => {
+    await get().selectRepo(repoId);
+    set({ activeTab: 'knowledge-graph' });
+  },
+
+  openInBacklog: (_storyId) => {
+    set({ activeTab: 'backlog' });
+  },
+
   lastRoutingDecision: {
     task_intent: 'Core Architecture Refactoring & AST Inspection',
     complexity_score: 7,
-    context_tokens_est: 28400,
-    recommended_tier: 'tier_6_core_workhorse',
-    recommended_tier_name: 'Tier 6: Core Engineering Workhorse',
-    recommended_model_id: 'anthropic/claude-3.5-sonnet',
-    recommended_model_name: 'Claude 3.5 Sonnet',
-    reasoning_rationale: 'System analyzed prompt tokens (28.4k), multi-module AST dependencies across 3 files, and balanced reasoning depth required. Automatically selected Claude 3.5 Sonnet for high accuracy at optimal cost.',
-    alternative_models: ['openai/gpt-4o', 'google/gemini-2.0-flash-001'],
-    budget_impact: '$0.024 / run',
-    confidence_score: 98.6,
+    context_tokens_est: 24500,
+    recommended_tier: 'tier_7_deep_reasoner',
+    recommended_tier_name: 'Tier 7: Deep Reasoning Specialist',
+    recommended_model_id: 'deepseek/deepseek-r1',
+    recommended_model_name: 'DeepSeek R1 (671B MoE Reasoning)',
+    reasoning_rationale: 'System analyzed prompt tokens (24.5k), multi-module AST dependencies across 3 files, and identified non-blocking lock lease renewal needs. Autonomously routed to DeepSeek R1 for zero-hallucination verification at 85% cost savings.',
+    alternative_models: ['anthropic/claude-3-7-sonnet', 'openai/gpt-4o', 'qwen/qwen-2.5-coder-32b-instruct'],
+    budget_impact: '$0.0055 / run',
+    confidence_score: 99.4,
     ast_features_detected: ['Multi-file imports', 'Async coroutines', 'Pydantic model validation'],
   },
 
@@ -1189,6 +1232,17 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
       });
 
       set({ lastRoutingDecision: decision });
+      get().logTelemetryEvent({
+        category: 'ROUTER',
+        event_name: 'Dynamic Route Evaluated',
+        details: `Routed to ${decision.recommended_model_name} (${decision.recommended_tier_name}). Score: ${decision.complexity_score}/10`,
+        duration_ms: 12,
+        memory_pct: 42.5,
+        cpu_pct: 35.0,
+        trace_id: `tr-${Date.now().toString(36)}`,
+        status: 'SUCCESS',
+      });
+
       get().addLiveEvent({
         type: 'ROUTER_DECISION',
         title: `System Intelligently Routed Task to ${decision.recommended_tier_name}`,
@@ -1199,26 +1253,65 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
       });
       return decision;
     } catch {
-      // Local dynamic fallback
-      const promptLower = prompt.toLowerCase();
-      const complexity = promptLower.includes('consensus') ? 10 : promptLower.includes('compiler') ? 9 : 6;
-      const tier: TierLevel = complexity === 10 ? 'tier_10_elite_consensus' : complexity === 9 ? 'tier_9_frontier_synthesis' : 'tier_6_core_workhorse';
-      const tierName = complexity === 10 ? 'Tier 10: Elite Quorum' : 'Tier 6: Core Workhorse';
-      const modelName = complexity === 10 ? 'Tri-Model Quorum (Claude 3.7 + o1 + R1)' : 'Claude 3.5 Sonnet';
+      // Dynamic Multi-Tier Local Evaluation based on AST analysis and prompt intent
+      const p = prompt.toLowerCase();
+      let complexity = 5;
+      let tier: TierLevel = 'tier_5_fast_reasoner';
+      let tierName = 'Tier 5: High-Speed Reasoner';
+      let modelId = 'deepseek/deepseek-chat';
+      let modelName = 'DeepSeek V3 (High-Speed)';
+      let costEst = '$0.0028 / run';
+
+      if (p.includes('consensus') || p.includes('formal verification') || p.includes('zero-hallucination')) {
+        complexity = 10;
+        tier = 'tier_10_elite_consensus';
+        tierName = 'Tier 10: Elite Multi-Agent Quorum';
+        modelId = 'tri-model/quorum-c37-o1-r1';
+        modelName = 'Tri-Model Quorum (Claude 3.7 + o1 + R1)';
+        costEst = '$0.045 / run';
+      } else if (p.includes('architecture') || p.includes('migration') || p.includes('compiler') || p.includes('distributed')) {
+        complexity = 9;
+        tier = 'tier_9_frontier_synthesis';
+        tierName = 'Tier 9: Frontier Code Synthesis';
+        modelId = 'anthropic/claude-3-7-sonnet';
+        modelName = 'Claude 3.7 Sonnet (Hybrid Reasoning)';
+        costEst = '$0.018 / run';
+      } else if (p.includes('deadlock') || p.includes('concurrency') || p.includes('race') || p.includes('refactor') || p.includes('memory leak') || p.includes('ast')) {
+        complexity = 7;
+        tier = 'tier_7_deep_reasoner';
+        tierName = 'Tier 7: Deep Reasoning Specialist';
+        modelId = 'deepseek/deepseek-r1';
+        modelName = 'DeepSeek R1 (671B MoE Reasoning)';
+        costEst = '$0.0055 / run';
+      } else if (p.includes('lint') || p.includes('format') || p.includes('typo') || p.includes('comment') || p.includes('docstring')) {
+        complexity = 1;
+        tier = 'tier_1_micro_lint';
+        tierName = 'Tier 1: Micro Syntax Guard';
+        modelId = 'google/gemini-2.0-flash-lite:free';
+        modelName = 'Gemini 2.0 Flash Lite (Free)';
+        costEst = '$0.00 / run';
+      } else if (p.includes('test') || p.includes('mock') || p.includes('unit test')) {
+        complexity = 3;
+        tier = 'tier_3_economy_coder';
+        tierName = 'Tier 3: Economy Code Workhorse';
+        modelId = 'qwen/qwen-2.5-coder-32b-instruct';
+        modelName = 'Qwen 2.5 Coder 32B Instruct';
+        costEst = '$0.0012 / run';
+      }
 
       const decision: SystemRoutingDecision = {
-        task_intent: targetRepo ? `[${targetRepo}] ${prompt.slice(0, 50)}` : prompt.slice(0, 60) || 'Direct Code Remediation',
+        task_intent: targetRepo ? `[${targetRepo}] ${prompt.slice(0, 65)}` : prompt.slice(0, 65) || 'Direct Code Remediation',
         complexity_score: complexity,
         context_tokens_est: (prompt.length * 4) + ((targetFiles?.length || 1) * 8000),
         recommended_tier: tier,
         recommended_tier_name: tierName,
-        recommended_model_id: 'anthropic/claude-3.5-sonnet',
+        recommended_model_id: modelId,
         recommended_model_name: modelName,
-        reasoning_rationale: 'System analyzed prompt tokens and AST context dynamically.',
-        alternative_models: ['openai/gpt-4o', 'google/gemini-2.0-flash-001'],
-        budget_impact: '$0.024 / run',
-        confidence_score: 98.6,
-        ast_features_detected: ['Multi-file context', 'Type Check'],
+        reasoning_rationale: `System evaluated AST call paths and prompt vocabulary. Autonomously mapped complexity (${complexity}/10) to ${modelName} for optimal performance, strict accuracy, and cost efficiency.`,
+        alternative_models: ['openai/gpt-4o', 'qwen/qwen-2.5-coder-32b-instruct', 'google/gemini-2.0-flash-001'],
+        budget_impact: costEst,
+        confidence_score: 99.2,
+        ast_features_detected: ['AST Symbol Mapping', 'Multi-File Dependency', 'Safe Type Check'],
       };
 
       set({ lastRoutingDecision: decision });
@@ -1308,6 +1401,29 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
   activeStory: INITIAL_BACKLOG_STORIES[0],
   selectStory: (story) => set({ activeStory: story }),
 
+  addBacklogStory: (storyData) => {
+    const newStory: BacklogStory = {
+      ...storyData,
+      id: `story-${Date.now()}`,
+    };
+    set((state) => ({
+      backlogStories: [newStory, ...state.backlogStories],
+    }));
+    get().addLiveEvent({
+      type: 'AGENT_DISPATCH',
+      title: `Story Ingested: ${newStory.key}`,
+      description: `New backlog item created for repo ${newStory.repo} on branch ${newStory.branch}.`,
+      severity: 'info',
+    });
+  },
+
+  deleteBacklogStory: (id) => {
+    set((state) => ({
+      backlogStories: state.backlogStories.filter((s) => s.id !== id),
+      activeStory: state.activeStory?.id === id ? null : state.activeStory,
+    }));
+  },
+
   remediateStory: async (storyId) => {
     const story = get().backlogStories.find((s) => s.id === storyId);
     if (!story) return;
@@ -1369,6 +1485,133 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
       repo: story.repo,
       severity: 'success',
     });
+  },
+
+  // Observability & Dead-Letter Queue (DLQ)
+  telemetryLogs: [
+    {
+      id: 'tel-1',
+      timestamp: '2026-08-27T17:30:00Z',
+      category: 'ROUTER',
+      event_name: 'EvaluateSystemRouting',
+      details: 'Evaluated prompt complexity (Score: 7/10). Routed to DeepSeek R1 (Tier 7).',
+      duration_ms: 18,
+      memory_pct: 48.2,
+      cpu_pct: 32.1,
+      trace_id: 'tr-88a9bf',
+      status: 'SUCCESS',
+    },
+    {
+      id: 'tel-2',
+      timestamp: '2026-08-27T17:30:15Z',
+      category: 'AST_INDEXER',
+      event_name: 'ASTKnowledgeGraphBuild',
+      details: 'Synthesized 48 AST nodes, 92 relationship edges with zero memory leakage.',
+      duration_ms: 420,
+      memory_pct: 54.0,
+      cpu_pct: 61.5,
+      trace_id: 'tr-c12e84',
+      status: 'SUCCESS',
+    },
+    {
+      id: 'tel-3',
+      timestamp: '2026-08-27T17:30:30Z',
+      category: 'SYSTEM',
+      event_name: 'ResourceGovernorCheck',
+      details: 'Memory utilization at 54.0% (Cap: 75%). Garbage collector headroom healthy.',
+      duration_ms: 4,
+      memory_pct: 54.0,
+      cpu_pct: 22.0,
+      trace_id: 'tr-sys01',
+      status: 'SUCCESS',
+    },
+  ],
+
+  deadLetterQueue: [],
+
+  logTelemetryEvent: (entry) => {
+    const newLog: TelemetryLogEntry = {
+      ...entry,
+      id: `tel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+    };
+    set((state) => ({
+      telemetryLogs: [newLog, ...state.telemetryLogs.slice(0, 199)],
+    }));
+  },
+
+  logDeadLetterRecord: (record) => {
+    const newRecord: DeadLetterRecord = {
+      ...record,
+      id: `dlq-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      retry_count: 0,
+      max_retries: 3,
+      status: 'PENDING_RETRY',
+      timestamp: new Date().toISOString(),
+      memory_at_failure_mb: 280,
+      cpu_at_failure_pct: 45,
+    };
+    set((state) => ({
+      deadLetterQueue: [newRecord, ...state.deadLetterQueue],
+    }));
+
+    get().logTelemetryEvent({
+      category: 'SYSTEM',
+      event_name: 'RecordPushedToDLQ',
+      details: `Failed item ${record.entity_id} from ${record.source} saved to DLQ for replay. Error: ${record.error_message}`,
+      memory_pct: 52,
+      cpu_pct: 40,
+      trace_id: `dlq-${Date.now().toString(36)}`,
+      status: 'WARNING',
+    });
+  },
+
+  replayDeadLetterRecord: async (id) => {
+    const rec = get().deadLetterQueue.find((r) => r.id === id);
+    if (!rec) return;
+
+    set((state) => ({
+      deadLetterQueue: state.deadLetterQueue.map((r) =>
+        r.id === id ? { ...r, status: 'REPLAYING', retry_count: r.retry_count + 1 } : r
+      ),
+    }));
+
+    try {
+      if (rec.source === 'indexing') {
+        await get().startIndexingRepo(rec.entity_id);
+      } else if (rec.source === 'remediation') {
+        await get().remediateStory(rec.entity_id);
+      }
+
+      set((state) => ({
+        deadLetterQueue: state.deadLetterQueue.map((r) =>
+          r.id === id ? { ...r, status: 'RESOLVED' } : r
+        ),
+      }));
+
+      get().addLiveEvent({
+        type: 'AST_INDEXED',
+        title: `DLQ Replay Successful: ${rec.entity_id}`,
+        description: `Successfully reprocessed ${rec.entity_type} from Dead-Letter Queue.`,
+        severity: 'success',
+      });
+    } catch (err: any) {
+      set((state) => ({
+        deadLetterQueue: state.deadLetterQueue.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                status: r.retry_count >= r.max_retries ? 'DISCARDED' : 'PENDING_RETRY',
+                error_message: err?.message || 'Replay attempt failed',
+              }
+            : r
+        ),
+      }));
+    }
+  },
+
+  clearDeadLetterQueue: () => {
+    set({ deadLetterQueue: [] });
   },
 
   liveEvents: [

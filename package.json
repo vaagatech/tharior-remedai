@@ -12,7 +12,7 @@
     "dev:web": "npm run dev --workspace=apps/web-desk",
     "dev:api": "uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 --app-dir apps/api-gateway",
     "dev:docs": "python3 -m http.server 8080 --directory apps/docs-site",
-    "test:python": "pytest -v",
+    "test:python": "./.venv/bin/pytest -v",
     "test": "npm run test:python && npm run build --workspace=apps/web-desk",
     "lint": "npm run lint --workspace=apps/web-desk"
   },

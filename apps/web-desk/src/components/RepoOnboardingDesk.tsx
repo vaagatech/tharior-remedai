@@ -7,7 +7,6 @@ import {
   AlertCircle,
   Network,
   GitBranch,
-  ArrowRight,
   CheckSquare,
   Square,
   Tag,
@@ -21,6 +20,7 @@ import {
   RotateCw,
   Edit3,
   Trash2,
+  Bot,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
 import type { GitAuthMethod, RepoAuthConfig, OnboardedRepo } from '../types';
@@ -41,7 +41,8 @@ export const RepoOnboardingDesk: React.FC = () => {
     batchIndexRepos,
     securityVault,
     rotateSecurityKeys,
-    setActiveTab,
+    openInStudio,
+    openInKnowledgeGraph,
   } = useRemedaiStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -64,13 +65,23 @@ export const RepoOnboardingDesk: React.FC = () => {
 
   // Edit Repo State
   const [editingRepo, setEditingRepo] = useState<OnboardedRepo | null>(null);
+  const [editModalTab, setEditModalTab] = useState<'general' | 'auth' | 'branches' | 'governance'>('general');
   const [editName, setEditName] = useState('');
   const [editOwner, setEditOwner] = useState('');
   const [editUrl, setEditUrl] = useState('');
-  const [editDefaultBranch, setEditDefaultBranch] = useState('');
+  const [editProvider, setEditProvider] = useState<'github' | 'gitlab' | 'bitbucket' | 'azure_devops' | 'custom_git'>('github');
+  const [editDefaultBranch, setEditDefaultBranch] = useState('main');
   const [editBranchTags, setEditBranchTags] = useState<string[]>([]);
   const [editNewBranchInput, setEditNewBranchInput] = useState('');
   const [editAuthMethod, setEditAuthMethod] = useState<GitAuthMethod>('github_app');
+  const [editAppId, setEditAppId] = useState('');
+  const [editInstallationId, setEditInstallationId] = useState('');
+  const [editPrivateKeyPem, setEditPrivateKeyPem] = useState('');
+  const [editOauthIdentity, setEditOauthIdentity] = useState('');
+  const [editAccessToken, setEditAccessToken] = useState('');
+  const [editSshKey, setEditSshKey] = useState('');
+  const [editWebhookUrl, setEditWebhookUrl] = useState('https://api.remedai.vaagatech.com/api/v1/webhooks/github');
+  const [editWebhookSecret, setEditWebhookSecret] = useState('whsec_••••••••••••••••');
 
   // Delete Repo State
   const [deletingRepo, setDeletingRepo] = useState<OnboardedRepo | null>(null);
@@ -81,12 +92,20 @@ export const RepoOnboardingDesk: React.FC = () => {
 
   const handleStartEdit = (repo: OnboardedRepo) => {
     setEditingRepo(repo);
+    setEditModalTab('general');
     setEditName(repo.name);
     setEditOwner(repo.owner || 'vaagatech');
     setEditUrl(repo.url);
+    setEditProvider((repo.provider as any) || 'github');
     setEditDefaultBranch(repo.default_branch || 'main');
     setEditBranchTags(repo.selected_branches?.length ? [...repo.selected_branches] : [repo.default_branch || 'main']);
     setEditAuthMethod(repo.auth_type || 'github_app');
+    setEditAppId(repo.auth_config?.app_id || 'app_1092834');
+    setEditInstallationId(repo.auth_config?.installation_id || 'inst_5893021');
+    setEditPrivateKeyPem(repo.auth_config?.private_key_preview || '');
+    setEditOauthIdentity(repo.auth_config?.oauth_identity || 'github:org:vaagatech');
+    setEditAccessToken(repo.auth_config?.encrypted_secret_preview ? 'ghp_••••••••••••••••' : '');
+    setEditSshKey(repo.auth_config?.method === 'ssh_deploy_key' ? 'ssh-rsa ••••••••••••' : '');
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -95,13 +114,32 @@ export const RepoOnboardingDesk: React.FC = () => {
 
     const finalBranches = Array.from(new Set([editDefaultBranch || 'main', ...editBranchTags]));
 
+    const updatedAuthConfig: RepoAuthConfig = {
+      ...editingRepo.auth_config,
+      method: editAuthMethod,
+      app_id: editAuthMethod === 'github_app' ? editAppId : undefined,
+      installation_id: editAuthMethod === 'github_app' ? editInstallationId : undefined,
+      private_key_preview: editAuthMethod === 'github_app' ? (editPrivateKeyPem || 'Default GitHub App Key') : undefined,
+      oauth_identity: editAuthMethod === 'federated_oauth' ? editOauthIdentity : undefined,
+      oauth_provider: editAuthMethod === 'federated_oauth' ? `${editProvider.toUpperCase()} Enterprise SSO` : undefined,
+      encrypted_secret_preview: editAuthMethod === 'encrypted_pat' ? (editAccessToken || 'ghp_•••••••••••••••• [Double-Encrypted]') : (editSshKey ? 'ssh-rsa •••••••••••• [Double-Encrypted]' : undefined),
+      encryption_layers: ['AES-256-GCM (Application DEK)', 'AWS KMS KEK (Envelope Encryption)'],
+      kms_key_id: securityVault.kek_key_arn,
+      kms_key_version: securityVault.active_kek_version,
+      last_rotated_at: securityVault.last_rotation_timestamp,
+      next_rotation_due: securityVault.next_scheduled_rotation,
+      rotation_period_days: securityVault.auto_rotation_interval_days,
+    };
+
     await updateRepo(editingRepo.id, {
       name: editName,
       owner: editOwner,
       url: editUrl,
+      provider: editProvider,
       default_branch: editDefaultBranch || 'main',
       selected_branches: finalBranches,
       auth_type: editAuthMethod,
+      auth_config: updatedAuthConfig,
     });
 
     setEditingRepo(null);
@@ -524,10 +562,50 @@ export const RepoOnboardingDesk: React.FC = () => {
                       : 'Active'}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
-                      title="Edit Repository"
+                      title="Open in Agent Studio"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openInStudio(`Refactor, optimize and review AST code symbols in ${repo.name}`, repo.name);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 border border-slate-200 rounded-lg font-medium transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Studio</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Inspect AST Knowledge Graph"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openInKnowledgeGraph(repo.id);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 border border-slate-200 rounded-lg font-medium transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Network className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Graph</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Re-Index AST Graph"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startIndexingRepo(repo.id);
+                      }}
+                      disabled={repo.status === 'INDEXING'}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg font-medium transition-all cursor-pointer shadow-2xs"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${repo.status === 'INDEXING' ? 'animate-spin' : ''}`} />
+                      <span>Index</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Edit Repository Settings"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleStartEdit(repo);
@@ -547,33 +625,6 @@ export const RepoOnboardingDesk: React.FC = () => {
                       className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors cursor-pointer shadow-2xs"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startIndexingRepo(repo.id);
-                      }}
-                      disabled={repo.status === 'INDEXING'}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg font-medium transition-all cursor-pointer shadow-2xs"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${repo.status === 'INDEXING' ? 'animate-spin' : ''}`} />
-                      Re-Index AST
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectRepo(repo.id);
-                        setActiveTab('knowledge-graph');
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-medium transition-all cursor-pointer"
-                    >
-                      <Network className="w-3.5 h-3.5" />
-                      Knowledge Graph
-                      <ArrowRight className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -905,10 +956,10 @@ export const RepoOnboardingDesk: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Repository Modal */}
+      {/* Edit Repository Configuration Modal (Comprehensive Multi-Tab) */}
       {editingRepo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -916,7 +967,7 @@ export const RepoOnboardingDesk: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-lg">Edit Repository Configuration</h3>
-                  <p className="text-xs text-slate-500">Update name, branches, and credentials for {editingRepo.name}</p>
+                  <p className="text-xs text-slate-500">Manage repository settings, multi-auth credentials, branch tags, and encryption vault</p>
                 </div>
               </div>
               <button
@@ -928,112 +979,350 @@ export const RepoOnboardingDesk: React.FC = () => {
               </button>
             </div>
 
+            {/* Tab Navigation */}
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              {[
+                { id: 'general', label: '1. General & Git' },
+                { id: 'auth', label: '2. Multi-Auth & 2x KMS' },
+                { id: 'branches', label: '3. Branch Cloud Tags' },
+                { id: 'governance', label: '4. Webhooks & Automations' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setEditModalTab(tab.id as any)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    editModalTab === tab.id
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Repository Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Owner / Organization</label>
-                <input
-                  type="text"
-                  required
-                  value={editOwner}
-                  onChange={(e) => setEditOwner(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Git Clone URL</label>
-                <input
-                  type="url"
-                  required
-                  value={editUrl}
-                  onChange={(e) => setEditUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Default Branch</label>
-                <input
-                  type="text"
-                  required
-                  value={editDefaultBranch}
-                  onChange={(e) => setEditDefaultBranch(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
-                />
-              </div>
-
-              {/* Branch Cloud Tags */}
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold uppercase text-slate-600">
-                  Indexed Branch Cloud Tags
-                </label>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap gap-1.5 items-center min-h-[44px]">
-                  {editBranchTags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-mono font-medium"
-                    >
-                      <GitBranch className="w-3 h-3" />
-                      <span>{tag}</span>
-                      {editBranchTags.length > 1 && (
+              {/* Tab 1: General Info */}
+              {editModalTab === 'general' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Git Provider</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(['github', 'gitlab', 'bitbucket', 'custom_git'] as const).map((p) => (
                         <button
                           type="button"
-                          onClick={() => setEditBranchTags(editBranchTags.filter((t) => t !== tag))}
-                          className="ml-1 text-indigo-400 hover:text-red-500 cursor-pointer"
+                          key={p}
+                          onClick={() => setEditProvider(p)}
+                          className={`px-3 py-2 text-xs font-medium rounded-lg border text-center uppercase cursor-pointer ${
+                            editProvider === p
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          }`}
                         >
-                          <X className="w-3 h-3" />
+                          {p === 'custom_git' ? 'Custom' : p}
                         </button>
-                      )}
-                    </span>
-                  ))}
+                      ))}
+                    </div>
+                  </div>
 
-                  <div className="flex items-center gap-1 flex-1 min-w-[130px]">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Repository Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Owner / Organization</label>
+                      <input
+                        type="text"
+                        required
+                        value={editOwner}
+                        onChange={(e) => setEditOwner(e.target.value)}
+                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Git Clone URL</label>
+                    <input
+                      type="url"
+                      required
+                      value={editUrl}
+                      onChange={(e) => setEditUrl(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Default Branch</label>
                     <input
                       type="text"
-                      placeholder="Add branch tag & enter..."
-                      value={editNewBranchInput}
-                      onChange={(e) => setEditNewBranchInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const val = editNewBranchInput.trim();
-                          if (val && !editBranchTags.includes(val)) {
-                            setEditBranchTags([...editBranchTags, val]);
-                            setEditNewBranchInput('');
-                          }
-                        }
-                      }}
-                      className="w-full bg-transparent text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none px-1"
+                      required
+                      value={editDefaultBranch}
+                      onChange={(e) => setEditDefaultBranch(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
                     />
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingRepo(null)}
-                  className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm shadow-sm cursor-pointer"
-                >
-                  Save Changes
-                </button>
+              {/* Tab 2: Multi-Auth & 2x KMS Vault */}
+              {editModalTab === 'auth' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Authentication Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'github_app', title: 'GitHub App (Full Org Control)', desc: 'Webhooks, App ID & RSA Key' },
+                        { id: 'federated_oauth', title: 'Federated OAuth / SSO', desc: 'Enterprise Identity Federation' },
+                        { id: 'encrypted_pat', title: 'Double-Encrypted PAT', desc: 'Scoped Access Token' },
+                        { id: 'ssh_deploy_key', title: 'SSH Deploy Key', desc: 'Read/Write SSH Deploy Key' },
+                      ].map((method) => (
+                        <button
+                          type="button"
+                          key={method.id}
+                          onClick={() => setEditAuthMethod(method.id as GitAuthMethod)}
+                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                            editAuthMethod === method.id
+                              ? 'bg-indigo-50/80 border-indigo-500 ring-2 ring-indigo-500/20'
+                              : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="font-bold text-xs text-slate-900">{method.title}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">{method.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {editAuthMethod === 'github_app' && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase text-slate-600 mb-1">GitHub App ID</label>
+                          <input
+                            type="text"
+                            value={editAppId}
+                            onChange={(e) => setEditAppId(e.target.value)}
+                            placeholder="app_1092834"
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase text-slate-600 mb-1">Installation ID</label>
+                          <input
+                            type="text"
+                            value={editInstallationId}
+                            onChange={(e) => setEditInstallationId(e.target.value)}
+                            placeholder="inst_5893021"
+                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold uppercase text-slate-600 mb-1">Private Key (.pem) Preview</label>
+                        <textarea
+                          rows={3}
+                          value={editPrivateKeyPem}
+                          onChange={(e) => setEditPrivateKeyPem(e.target.value)}
+                          placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800 leading-tight"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {editAuthMethod === 'federated_oauth' && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <label className="block text-[11px] font-semibold uppercase text-slate-600">OAuth Enterprise Identity</label>
+                      <input
+                        type="text"
+                        value={editOauthIdentity}
+                        onChange={(e) => setEditOauthIdentity(e.target.value)}
+                        placeholder="github:org:vaagatech"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                      />
+                    </div>
+                  )}
+
+                  {editAuthMethod === 'encrypted_pat' && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <label className="block text-[11px] font-semibold uppercase text-slate-600">Personal Access Token (PAT)</label>
+                      <input
+                        type="password"
+                        value={editAccessToken}
+                        onChange={(e) => setEditAccessToken(e.target.value)}
+                        placeholder="ghp_••••••••••••••••"
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                      />
+                    </div>
+                  )}
+
+                  {editAuthMethod === 'ssh_deploy_key' && (
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <label className="block text-[11px] font-semibold uppercase text-slate-600">SSH Private Deploy Key</label>
+                      <textarea
+                        rows={3}
+                        value={editSshKey}
+                        onChange={(e) => setEditSshKey(e.target.value)}
+                        placeholder="ssh-rsa AAAAB3NzaC1yc2E..."
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800 leading-tight"
+                      />
+                    </div>
+                  )}
+
+                  {/* KMS Envelope Encryption Vault Info */}
+                  <div className="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs space-y-1">
+                    <div className="flex items-center gap-2 font-bold text-emerald-800">
+                      <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                      <span>Paramount Security: 2x Double Envelope Encryption Active</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 leading-relaxed">
+                      Application DEK (AES-256-GCM) + Cloud KMS KEK (<span className="font-mono">{securityVault.kek_key_arn.split('/').pop()}</span>). Active Key Version: <strong className="font-mono">v{securityVault.active_kek_version}</strong>. Next scheduled rotation in 90 days.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Branch Cloud Tags & Presets */}
+              {editModalTab === 'branches' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
+                      Indexed Branch Cloud Tags ({editBranchTags.length})
+                    </label>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap gap-1.5 items-center min-h-[48px]">
+                      {editBranchTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-mono font-medium"
+                        >
+                          <GitBranch className="w-3 h-3" />
+                          <span>{tag}</span>
+                          {editBranchTags.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => setEditBranchTags(editBranchTags.filter((t) => t !== tag))}
+                              className="ml-1 text-indigo-400 hover:text-red-500 cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+
+                      <div className="flex items-center gap-1 flex-1 min-w-[140px]">
+                        <input
+                          type="text"
+                          placeholder="Add branch tag & enter..."
+                          value={editNewBranchInput}
+                          onChange={(e) => setEditNewBranchInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = editNewBranchInput.trim();
+                              if (val && !editBranchTags.includes(val)) {
+                                setEditBranchTags([...editBranchTags, val]);
+                                setEditNewBranchInput('');
+                              }
+                            }
+                          }}
+                          className="w-full bg-transparent text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none px-1"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-slate-500 uppercase">Quick Presets:</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {['main', 'develop', 'staging', 'release/v2.0', 'feature/ast-graph', 'infra-modules'].map((preset) => (
+                        <button
+                          type="button"
+                          key={preset}
+                          onClick={() => {
+                            if (!editBranchTags.includes(preset)) {
+                              setEditBranchTags([...editBranchTags, preset]);
+                            }
+                          }}
+                          disabled={editBranchTags.includes(preset)}
+                          className={`px-2.5 py-1 rounded-lg border text-xs font-mono transition-colors cursor-pointer ${
+                            editBranchTags.includes(preset)
+                              ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-default'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
+                          }`}
+                        >
+                          + {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 4: Webhooks & Governance */}
+              {editModalTab === 'governance' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Webhook Listener Endpoint</label>
+                    <input
+                      type="text"
+                      value={editWebhookUrl}
+                      onChange={(e) => setEditWebhookUrl(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Webhook Signing Secret</label>
+                    <input
+                      type="password"
+                      value={editWebhookSecret}
+                      onChange={(e) => setEditWebhookSecret(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                    <div className="font-bold text-slate-800">AST Indexing Policy</div>
+                    <p className="text-slate-500 text-[11px] leading-relaxed">
+                      Automatic incremental AST parsing runs on each Git push webhook event. CPU and memory headroom are strictly governed under 75%.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <div className="text-xs text-slate-500">
+                  Target: <strong className="text-slate-800 font-mono">{editName}</strong>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRepo(null)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm cursor-pointer"
+                  >
+                    Save All Repository Changes
+                  </button>
+                </div>
               </div>
             </form>
           </div>
