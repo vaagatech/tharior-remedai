@@ -140,10 +140,16 @@ jobs:
             fi
           fi
 
+          # Ensure namespace exists and is not terminating
+          while kubectl get ns remedai 2>/dev/null | grep -q "Terminating"; do
+            echo "Waiting for terminating namespace remedai to finalize..."
+            sleep 3
+          done
+          kubectl get ns remedai >/dev/null 2>&1 || kubectl create namespace remedai
+
           helm upgrade --install remedai-api "$CHART_PATH" \
             -f app-config.yaml \
             --namespace remedai \
-            --create-namespace \
             --set global.image="$IMAGE_URI" \
             --set app.image="$IMAGE_URI" \
             --wait --timeout 5m
