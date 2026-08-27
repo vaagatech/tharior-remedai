@@ -101,7 +101,7 @@ jobs:
       - name: Install Dependencies & Build Web Desk
         run: |
           cd apps/web-desk
-          npm install --include=optional
+          npm install --no-package-lock
           echo "Building Web Desk with dynamic deployment parameters:"
           echo " - Cognito User Pool: $COGNITO_USER_POOL_ID"
           echo " - Cognito Client ID: $COGNITO_CLIENT_ID"
