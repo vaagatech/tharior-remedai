@@ -12,6 +12,8 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_caller_identity" "current" {}
+
 # 1. AWS Cognito User Pool
 resource "aws_cognito_user_pool" "pool" {
   name                     = "${var.project_name}-${var.environment}-user-pool"
@@ -63,7 +65,7 @@ resource "aws_cognito_user_pool_client" "client" {
 
 # 3. AWS S3 Bucket for UI Web Desk Static Hosting
 resource "aws_s3_bucket" "ui_bucket" {
-  bucket        = "${var.project_name}-${var.environment}-ui-static-hosting"
+  bucket        = "${var.project_name}-${var.environment}-ui-${data.aws_caller_identity.current.account_id}"
   force_destroy = false
 
   tags = {
@@ -84,7 +86,7 @@ resource "aws_s3_bucket_public_access_block" "ui_bucket_block" {
 
 # 4. CloudFront Origin Access Control (OAC)
 resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "${var.project_name}-${var.environment}-oac"
+  name                              = "${var.project_name}-${var.environment}-oac-${data.aws_caller_identity.current.account_id}"
   description                       = "Origin Access Control for ${var.project_name} S3 UI bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"

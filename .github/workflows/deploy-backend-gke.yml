@@ -40,6 +40,8 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: 'gke-gcloud-auth-plugin'
 
       # Dynamically extract GCP Project ID, Region, and GKE Cluster Name
       - name: Resolve GCP & GKE Dynamic Parameters
