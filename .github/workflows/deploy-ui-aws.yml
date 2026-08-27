@@ -36,9 +36,6 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            apps/web-desk/package-lock.json
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -194,14 +191,12 @@ jobs:
           echo " - CloudFront Domain: $CLOUDFRONT_URL"
 
           npm ci
-          cd apps/web-desk
-          npm ci
 
           VITE_API_BASE_URL="$VITE_API_BASE_URL" \
           VITE_COGNITO_USER_POOL_ID="$COGNITO_USER_POOL_ID" \
           VITE_COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID" \
           VITE_AWS_REGION="${{ secrets.AWS_REGION || 'us-east-1' }}" \
-          npm run build
+          npm run build --workspace=@tharior/web-desk
 
       # Step 4: Sync Built Assets to S3 Static Hosting Bucket
       - name: Sync Static Assets to AWS S3
