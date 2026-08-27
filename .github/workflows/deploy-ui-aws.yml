@@ -47,28 +47,15 @@ jobs:
         with:
           terraform_version: '1.8.0'
 
-      # Step 1: Clone deployment infra dynamically from gke-deployment repo
-      - name: Fetch Deployment Infrastructure Modules
+      # Step 1: Fetch deployment infrastructure module from centralized S3 infra store (sourced from gke-deployment)
+      - name: Fetch Deployment Infrastructure
         run: |
-          echo "Cloning centralized deployment infrastructure from gke-deployment..."
-          git clone --depth 1 https://github.com/vaagatech/gke-deployment.git /tmp/gke-deployment
-
-      # Step 2: Provision / Refresh AWS Cognito, S3 & CloudFront with Persistent S3 Backend
-      - name: Provision AWS S3, CloudFront & Cognito via Terraform
-        id: tf_aws
-        run: |
-          cd /tmp/gke-deployment/modules/aws_ui_hosting
-          
           ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
           AWS_REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           STATE_BUCKET="remedai-terraform-state-${ACCOUNT_ID}"
-          STATE_KEY="remedai/${ENV_NAME}/ui.tfstate"
-          BUCKET_NAME="remedai-${ENV_NAME}-ui-${ACCOUNT_ID}"
-          OAC_NAME="remedai-${ENV_NAME}-oac-${ACCOUNT_ID}"
-          POOL_NAME="remedai-${ENV_NAME}-user-pool"
 
-          echo "Ensuring S3 Remote State Bucket exists: $STATE_BUCKET"
+          echo "Ensuring S3 Remote State & Infra Bucket exists: $STATE_BUCKET"
           if ! aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
             if [ "$AWS_REGION" = "us-east-1" ]; then
               aws s3api create-bucket --bucket "$STATE_BUCKET" --region "$AWS_REGION"
@@ -81,6 +68,25 @@ jobs:
             aws s3api put-bucket-encryption --bucket "$STATE_BUCKET" \
               --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
           fi
+
+          mkdir -p /tmp/aws_ui_hosting
+          echo "Downloading Terraform infra modules from s3://${STATE_BUCKET}/infra/aws_ui_hosting/..."
+          aws s3 sync "s3://${STATE_BUCKET}/infra/aws_ui_hosting/" /tmp/aws_ui_hosting/
+
+      # Step 2: Provision / Refresh AWS Cognito, S3 & CloudFront with Persistent S3 Backend
+      - name: Provision AWS S3, CloudFront & Cognito via Terraform
+        id: tf_aws
+        run: |
+          cd /tmp/aws_ui_hosting
+          
+          ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
+          AWS_REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          STATE_BUCKET="remedai-terraform-state-${ACCOUNT_ID}"
+          STATE_KEY="remedai/${ENV_NAME}/ui.tfstate"
+          BUCKET_NAME="remedai-${ENV_NAME}-ui-${ACCOUNT_ID}"
+          OAC_NAME="remedai-${ENV_NAME}-oac-${ACCOUNT_ID}"
+          POOL_NAME="remedai-${ENV_NAME}-user-pool"
 
           echo "Initializing Terraform with S3 backend: s3://${STATE_BUCKET}/${STATE_KEY}"
           terraform init \
