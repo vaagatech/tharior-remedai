@@ -36,6 +36,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            apps/web-desk/package-lock.json
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -81,7 +84,7 @@ jobs:
       # Step 3: Build React Web Desk with Dynamically Injected Auth Config
       - name: Install Dependencies & Build Web Desk
         run: |
-          npm ci
+          npm ci || npm install
           echo "Building Web Desk with dynamic deployment parameters:"
           echo " - Cognito User Pool: $COGNITO_USER_POOL_ID"
           echo " - Cognito Client ID: $COGNITO_CLIENT_ID"
