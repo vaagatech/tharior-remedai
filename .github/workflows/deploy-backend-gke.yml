@@ -98,25 +98,32 @@ jobs:
           gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 
       - name: Build and Push Docker Image
-        env:
-          IMAGE_NAME: remedai-api
-          IMAGE_TAG: ${{ github.sha }}
+        id: docker_build
         run: |
-          REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REGISTRY_REPO"
-          echo "Building Docker container for FastAPI backend..."
-          docker build -t "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" -t "$REGISTRY/$IMAGE_NAME:latest" apps/api-gateway
-          docker push "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
-          docker push "$REGISTRY/$IMAGE_NAME:latest"
+          IMAGE_URI="$REGION-docker.pkg.dev/$PROJECT_ID/$REGISTRY_REPO/remedai-api:${{ github.sha }}"
+          LATEST_URI="$REGION-docker.pkg.dev/$PROJECT_ID/$REGISTRY_REPO/remedai-api:latest"
 
-          echo "IMAGE_URI=$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" >> $GITHUB_ENV
+          echo "Building multi-stage container image: $IMAGE_URI"
+          docker build \
+            -f apps/api-gateway/Dockerfile \
+            -t "$IMAGE_URI" \
+            -t "$LATEST_URI" \
+            .
 
-      - name: Get GKE Cluster Credentials
-        run: |
-          gcloud container clusters get-credentials "$CLUSTER_NAME" \
-            --region "$REGION" \
-            --project "$PROJECT_ID"
+          echo "Pushing image to Google Artifact Registry..."
+          docker push "$IMAGE_URI"
+          docker push "$LATEST_URI"
 
-      - name: Install Helm
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Connect to GKE Cluster
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ env.REGION }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
           version: 'v3.14.0'
@@ -177,3 +184,37 @@ jobs:
           }
           echo "Current deployment and autoscaling status:"
           kubectl get pods,svc,scaledobject,scaledjob -n remedai
+
+      # Optional step to update central S3 deployment manifest if AWS credentials exist
+      - name: Update Central S3 Deployment Manifest
+        if: ${{ env.AWS_ACCESS_KEY_ID != '' || secrets.AWS_ACCESS_KEY_ID != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+        run: |
+          if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+            ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
+            STATE_BUCKET="remedai-terraform-state-${ACCOUNT_ID}"
+
+            # Discover external IP / hostname of remedai service
+            SVC_IP=$(kubectl get svc remedai-bff -n remedai -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+            SVC_HOST=$(kubectl get svc remedai-bff -n remedai -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            
+            if [ -n "$SVC_IP" ]; then
+              API_ENDPOINT="http://${SVC_IP}:8000"
+            elif [ -n "$SVC_HOST" ]; then
+              API_ENDPOINT="http://${SVC_HOST}:8000"
+            else
+              API_ENDPOINT="https://dev-api-gw.gateway.dev"
+            fi
+
+            echo "Saving active API Gateway endpoint $API_ENDPOINT to s3://${STATE_BUCKET}/config/${ENV_NAME}/manifest.json"
+            if aws s3api head-bucket --bucket "$STATE_BUCKET" 2>/dev/null; then
+              aws s3 cp "s3://${STATE_BUCKET}/config/${ENV_NAME}/manifest.json" /tmp/manifest.json 2>/dev/null || echo "{}" > /tmp/manifest.json
+              jq --arg ep "$API_ENDPOINT" --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                '.GCP_API_GATEWAY_URL = $ep | .BACKEND_DEPLOYED_TIMESTAMP = $ts' /tmp/manifest.json > /tmp/manifest_updated.json
+              aws s3 cp /tmp/manifest_updated.json "s3://${STATE_BUCKET}/config/${ENV_NAME}/manifest.json"
+            fi
+          fi

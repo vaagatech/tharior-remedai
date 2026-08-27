@@ -6,6 +6,9 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  # Remote S3 Backend for persistent state across all CI/CD runs
+  backend "s3" {}
 }
 
 provider "aws" {
