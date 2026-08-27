@@ -14,8 +14,12 @@ import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { useRemedaiStore } from './store/useRemedaiStore';
 
 export const App: React.FC = () => {
-  const { activeTab, setActiveTab } = useRemedaiStore();
+  const { activeTab, setActiveTab, fetchInitialData } = useRemedaiStore();
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   // Sync activeTab with browser URL hash for location-based routing
   useEffect(() => {

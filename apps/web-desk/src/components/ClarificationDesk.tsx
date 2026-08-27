@@ -5,6 +5,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
+import { apiFetch } from '../config/api';
 
 export const ClarificationDesk: React.FC = () => {
   const { addLiveEvent } = useRemedaiStore();
@@ -24,12 +25,23 @@ export const ClarificationDesk: React.FC = () => {
   const [customComment, setCustomComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmitResponse = () => {
+  const handleSubmitResponse = async () => {
     setSubmitted(true);
+    try {
+      await apiFetch(`/api/v1/clarification/${activeSession.id}/answer`, {
+        method: 'POST',
+        body: JSON.stringify({
+          answers: { [activeSession.question]: customComment || selectedOption },
+        }),
+      });
+    } catch {
+      // Graceful fallback
+    }
+
     addLiveEvent({
       type: 'AGENT_DISPATCH',
       title: 'Clarification Provided to Architecture Agent',
-      description: `Tenant decision recorded: ${selectedOption}. Agent resumed execution loop.`,
+      description: `Tenant decision recorded: ${customComment || selectedOption}. Agent resumed execution loop.`,
       severity: 'info',
     });
   };

@@ -13,7 +13,12 @@ import { useRemedaiStore } from '../store/useRemedaiStore';
 export const SettingsDesk: React.FC = () => {
   const { addLiveEvent, securityVault, rotateSecurityKeys } = useRemedaiStore();
 
-  const [apiGatewayUrl, setApiGatewayUrl] = useState('https://dev-api-gw.gateway.dev');
+  const [apiGatewayUrl, setApiGatewayUrl] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('remedai_api_gateway_url') || 'https://dev-api-gw.gateway.dev';
+    }
+    return 'https://dev-api-gw.gateway.dev';
+  });
   const [openRouterKey, setOpenRouterKey] = useState('sk-or-v1-xxxxxxxxxxxxxxxxxxxx');
   const [s3StateBucket, setS3StateBucket] = useState('remedai-terraform-state-257984970292');
   const [kmsKeyArn, setKmsKeyArn] = useState(securityVault.kek_key_arn);
@@ -21,6 +26,9 @@ export const SettingsDesk: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('remedai_api_gateway_url', apiGatewayUrl);
+    }
     setSaved(true);
     addLiveEvent({
       type: 'MODEL_SYNC',
