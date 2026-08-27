@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - 'apps/web-desk/**'
-      - 'deploy/terraform-aws/**'
       - '.github/workflows/deploy-ui-aws.yml'
   workflow_dispatch:
     inputs:
@@ -48,11 +47,17 @@ jobs:
         with:
           terraform_version: '1.8.0'
 
-      # Step 1: Provision / Refresh AWS Cognito, S3 & CloudFront with Persistent S3 Backend
+      # Step 1: Clone deployment infra dynamically from gke-deployment repo
+      - name: Fetch Deployment Infrastructure Modules
+        run: |
+          echo "Cloning centralized deployment infrastructure from gke-deployment..."
+          git clone --depth 1 https://github.com/vaagatech/gke-deployment.git /tmp/gke-deployment
+
+      # Step 2: Provision / Refresh AWS Cognito, S3 & CloudFront with Persistent S3 Backend
       - name: Provision AWS S3, CloudFront & Cognito via Terraform
         id: tf_aws
         run: |
-          cd deploy/terraform-aws
+          cd /tmp/gke-deployment/modules/aws_ui_hosting
           
           ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
           AWS_REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
@@ -132,7 +137,7 @@ jobs:
           echo "CLOUDFRONT_URL=$CLOUDFRONT_URL" >> $GITHUB_ENV
           echo "STATE_BUCKET=$STATE_BUCKET" >> $GITHUB_ENV
 
-      # Step 2: Resolve GCP API Gateway Endpoint & Write Central S3 Manifest
+      # Step 3: Resolve GCP API Gateway Endpoint & Write Central S3 Manifest
       - name: Resolve API Gateway & Persist Deployment Variables to S3
         id: resolve_api
         run: |
@@ -179,7 +184,7 @@ jobs:
           aws s3 cp /tmp/manifest.json "s3://${STATE_BUCKET}/config/${ENV_NAME}/manifest.json"
           aws s3 cp /tmp/manifest.json "s3://${AWS_S3_BUCKET_NAME}/env-config.json"
 
-      # Step 3: Build React Web Desk with Injected Auth & API Configuration
+      # Step 4: Build React Web Desk with Injected Auth & API Configuration
       - name: Install Dependencies & Build Web Desk
         run: |
           echo "Building Web Desk SPA with persistent environment variables:"
@@ -198,7 +203,7 @@ jobs:
           VITE_AWS_REGION="${{ secrets.AWS_REGION || 'us-east-1' }}" \
           npm run build --workspace=@tharior/web-desk
 
-      # Step 4: Sync Built Assets to S3 Static Hosting Bucket
+      # Step 5: Sync Built Assets to S3 Static Hosting Bucket
       - name: Sync Static Assets to AWS S3
         run: |
           echo "Syncing built assets to s3://$AWS_S3_BUCKET_NAME..."
@@ -212,7 +217,7 @@ jobs:
           aws s3 cp apps/web-desk/dist/index.html "s3://$AWS_S3_BUCKET_NAME/index.html" \
             --cache-control "no-cache, no-store, must-revalidate"
 
-      # Step 5: Invalidate CloudFront CDN Cache
+      # Step 6: Invalidate CloudFront CDN Cache
       - name: Invalidate AWS CloudFront Cache
         run: |
           echo "Invalidating CloudFront Cache for Distribution: $CLOUDFRONT_DISTRIBUTION_ID"

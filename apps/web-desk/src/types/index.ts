@@ -27,23 +27,6 @@ export type TierLevel =
 
 export type ModalityType = 'text' | 'audio' | 'video' | 'image' | 'presentation' | 'pdf';
 
-export interface ModelTierSpec {
-  tier: TierLevel;
-  tier_number: number;
-  name: string;
-  description: string;
-  functional_specialization: string;
-  knowledge_vs_reasoning: string;
-  target_tasks: string[];
-  representative_models: string[];
-  input_cost_per_1m_usd: number;
-  output_cost_per_1m_usd: number;
-  est_latency_ms: number;
-  benchmarks: Record<string, string>;
-  reasoning_level: 'minimal' | 'low' | 'balanced' | 'high' | 'ultra' | 'multi_agent_consensus';
-  cost_category: string;
-}
-
 export interface ModelCatalogEntry {
   id: string;
   name: string;
@@ -58,12 +41,32 @@ export interface ModelCatalogEntry {
   modalities: ModalityType[];
   coding_score?: number;
   reasoning_score?: number;
+  status?: 'active' | 'degraded' | 'rate_limited';
+  load_weight?: number;
+}
+
+export interface ModelTierSpec {
+  tier: TierLevel;
+  tier_number: number;
+  name: string;
+  description: string;
+  functional_specialization: string;
+  knowledge_vs_reasoning: string;
+  target_tasks: string[];
+  representative_models: string[];
+  registered_models: ModelCatalogEntry[];
+  input_cost_per_1m_usd: number;
+  output_cost_per_1m_usd: number;
+  est_latency_ms: number;
+  benchmarks: Record<string, string>;
+  reasoning_level: 'minimal' | 'low' | 'balanced' | 'high' | 'ultra' | 'multi_agent_consensus';
+  cost_category: string;
 }
 
 export interface CustomerTierOverrideConfig {
   tenant_id: string;
   allowed_models: string[];
-  tier_shifts: Record<string, number>; // model_id -> -2, -1, 0, 1, 2
+  tier_shifts: Record<string, number>;
   prefer_free_models: boolean;
   custom_openrouter_url?: string;
   custom_openrouter_key?: string;
@@ -98,137 +101,181 @@ export interface BacklogStory {
   assigned_agent?: string;
   tier_needed: TierLevel;
   estimated_cost_usd: number;
-  created_at: string;
-  comments_count: number;
-  pr_url?: string;
-  auto_merge_allowed: boolean;
+  diff_preview?: string;
+  automated_remediation_summary?: string;
+  last_comment?: string;
 }
 
 export interface PromptExecutionRequest {
-  prompt: string;
-  code_context?: string;
-  file_path?: string;
-  repo_name?: string;
-  agent_role: 'coder' | 'architect' | 'bug_hunter' | 'sast_guard' | 'pr_reviewer' | 'autonomous_lead';
-  target_tier: TierLevel;
-  selected_model?: string;
-  enable_internet_search: boolean;
-  enable_ast_inspection: boolean;
-  consensus_mode: boolean;
-  user_id?: string;
-  tenant_id?: string;
-}
-
-export interface ClarificationQuestion {
   id: string;
-  question: string;
-  suggested_options?: string[];
-  answer?: string;
-  selected_option?: string;
-  answered_at?: number;
-  answered_by?: string;
+  developer_prompt: string;
+  target_repo: string;
+  target_files: string[];
+  ast_symbols_context?: string[];
+  reflection_enabled: boolean;
+  internet_search_enabled: boolean;
+  auto_apply_diff: boolean;
 }
 
-export interface ClarificationSession {
-  session_id: string;
-  task_id: string;
-  ticket_id: string;
-  repo_name: string;
-  title: string;
-  status: TaskStatus;
-  questions: ClarificationQuestion[];
-  tenant_group: string;
-  created_at: number;
-  updated_at: number;
-  resolved_context?: string;
+export interface SystemRoutingDecision {
+  task_intent: string;
+  complexity_score: number;
+  context_tokens_est: number;
+  recommended_tier: TierLevel;
+  recommended_tier_name: string;
+  recommended_model_id: string;
+  recommended_model_name: string;
+  reasoning_rationale: string;
+  alternative_models: string[];
+  budget_impact: string;
+  confidence_score: number;
+  ast_features_detected: string[];
 }
 
-export interface AgentCard {
-  agent_id: string;
+export interface OnboardedRepo {
+  id: string;
   name: string;
-  role: string;
-  domain: string;
-  description: string;
-  capabilities: string[];
-  mcp_tools: string[];
-  default_tier: TierLevel;
-  avatar_color: string;
-  cost_per_1k_est: number;
-}
-
-export interface ExecutionTraceStep {
-  step_id: string;
-  timestamp: number;
-  phase: string;
-  agent_name: string;
-  tier: string;
-  model: string;
-  action: string;
-  mcp_server?: string;
-  mcp_tool?: string;
-  inputs: Record<string, any>;
-  outputs: Record<string, any>;
-  cost_usd: number;
-  latency_ms: number;
-  status: string;
-}
-
-export interface TaskExecutionReport {
-  task_id: string;
-  ticket_id: string;
-  repo_name: string;
-  title: string;
-  status: TaskStatus;
-  assigned_agent: string;
-  tier: TierLevel;
-  selected_model: string;
-  total_cost_usd: number;
-  total_latency_ms: number;
-  input_tokens: number;
-  output_tokens: number;
-  patch_diff?: string;
-  pr_url?: string;
-  test_results?: {
-    tests_passed: boolean;
-    exit_code?: number;
-    passed_count?: number;
-    failed_count?: number;
-    duration_ms?: number;
-    test_suites?: Array<{ name: string; status: string; duration_ms: number }>;
-    stdout?: string;
+  owner: string;
+  provider: 'github' | 'gitlab' | 'bitbucket' | 'azure_devops' | 'custom_git';
+  url: string;
+  default_branch: string;
+  status: 'NOT_INDEXED' | 'INDEXING' | 'INDEXED' | 'FAILED' | 'OUT_OF_SYNC';
+  last_indexed_at?: string;
+  stats: {
+    files_count: number;
+    lines_of_code: number;
+    symbols_count: number;
+    kg_nodes_count: number;
+    kg_edges_count: number;
+    languages: Record<string, number>;
   };
-  traces: ExecutionTraceStep[];
-  created_at: number;
-  completed_at?: number;
+  auth_type: 'pat' | 'ssh' | 'oauth' | 'none';
+  selected?: boolean;
 }
 
+export interface KnowledgeGraphNode {
+  id: string;
+  label: string;
+  type: 'module' | 'package' | 'class' | 'function' | 'interface' | 'api_endpoint' | 'db_schema';
+  filePath: string;
+  lineRange: [number, number];
+  complexity: number;
+  docstring?: string;
+  callers: string[];
+  callees: string[];
+  dependencies: string[];
+  x?: number;
+  y?: number;
+}
+
+export interface KnowledgeGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: 'imports' | 'calls' | 'implements' | 'inherits' | 'defines';
+  weight?: number;
+}
+
+export interface KnowledgeGraphData {
+  repo_id: string;
+  repo_name: string;
+  indexed_at: string;
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+}
+
+export interface LiveEventItem {
+  id: string;
+  timestamp: string;
+  type: 'AGENT_DISPATCH' | 'AST_INDEXED' | 'ROUTER_DECISION' | 'TIER_SELECTION' | 'MODEL_SYNC' | 'DIFF_GENERATED' | 'PR_REVIEW' | 'AUTO_MERGE' | 'KEDA_SCALE';
+  title: string;
+  description: string;
+  tier?: TierLevel;
+  model?: string;
+  repo?: string;
+  severity: 'info' | 'success' | 'warning' | 'error';
+}
+
+// Legacy compatibility exports
 export interface TelemetryMetrics {
-  total_dispatched: number;
-  success_rate_percent: number;
-  aggregate_cost_usd: number;
-  avg_cost_per_fix_usd: number;
-  active_mcp_tools: number;
-  tier_distribution: Record<string, number>;
-  total_tokens: number;
+  total_requests: number;
+  cache_hit_rate: number;
+  avg_latency_ms: number;
+  total_cost_saved_usd: number;
+  total_dispatched?: number;
+  success_rate_percent?: number;
+  aggregate_cost_usd?: number;
+  avg_cost_per_fix_usd?: number;
+  active_mcp_tools?: number;
+  tier_distribution?: Record<string, number>;
+  total_tokens?: number;
 }
 
 export interface SystemMetrics {
-  rss_bytes: number;
-  rss_mb: number;
-  vms_mb: number;
-  max_memory_mb: number;
-  headroom_mb: number;
-  reserve_mb: number;
-  usage_percent: number;
-  cpu_percent: number;
-  headroom_healthy: boolean;
+  active_workers: number;
+  queue_depth: number;
+  memory_utilization_pct: number;
+  cpu_utilization_pct: number;
+  rss_bytes?: number;
+  rss_mb?: number;
+  vms_mb?: number;
+  max_memory_mb?: number;
+  headroom_mb?: number;
+  reserve_mb?: number;
+  usage_percent?: number;
+  cpu_percent?: number;
+  headroom_healthy?: boolean;
 }
 
-export interface SearchItem {
+export interface TaskExecutionReport {
   id: string;
+  task_id: string;
   title: string;
-  category: 'TIER' | 'MODEL' | 'AGENT' | 'STORY' | 'PLAYBOOK' | 'EVENT' | 'TOOL';
-  subtitle: string;
-  path: string;
-  meta?: Record<string, any>;
+  status: TaskStatus;
+  tier_used: TierLevel;
+  model_used: string;
+  cost_usd: number;
+  execution_time_ms: number;
+  ast_nodes_affected: number;
+  created_at: string;
+  traces?: Array<{
+    step_id?: string;
+    phase?: string;
+    agent?: string;
+    action?: string;
+    timestamp?: string;
+    status?: string;
+    reasoning?: string;
+    tokens?: number;
+    cost_usd?: number;
+    tier?: TierLevel;
+    model?: string;
+    tool_calls?: string[];
+  }>;
+  ticket_id?: string;
+  repo_name?: string;
+  assigned_agent?: string;
+  tier?: TierLevel;
+  total_cost_usd?: number;
+  total_latency_ms?: number;
+  test_results?: any;
+  patch_diff?: string;
+  pr_url?: string;
+}
+
+export interface ClarificationSession {
+  id: string;
+  task_id: string;
+  question: string;
+  options: string[];
+  status: 'PENDING' | 'RESOLVED';
+  created_at: string;
+}
+
+export interface AgentCard {
+  id: string;
+  name: string;
+  role: string;
+  status: 'IDLE' | 'BUSY' | 'PAUSED';
+  current_task?: string;
 }

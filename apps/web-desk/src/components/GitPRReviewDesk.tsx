@@ -1,168 +1,143 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   GitPullRequest,
-  ShieldCheck,
-  FileCode,
+  CheckCircle2,
+  GitMerge,
   RotateCw,
-  Check,
 } from 'lucide-react';
+import { useRemedaiStore } from '../store/useRemedaiStore';
 
-export function GitPRReviewDesk() {
-  const [targetRepo, setTargetRepo] = useState('vaagatech/tharior-remedai');
-  const [prNumber, setPrNumber] = useState('42');
-  const [autoMergePolicy, setAutoMergePolicy] = useState(true);
-  const [isReviewing, setIsReviewing] = useState(false);
+export const GitPRReviewDesk: React.FC = () => {
+  const { activeRepo, addLiveEvent } = useRemedaiStore();
+  const [isMerging, setIsMerging] = useState(false);
+  const [merged, setMerged] = useState(false);
 
-  const findings = [
+  const mockFindings = [
     {
-      id: 'f1',
-      file: 'apps/api-gateway/app/core/event_bus.py',
-      line: 28,
-      severity: 'POSITIVE',
-      comment: 'Excellent fix: Unregistering websocket from active_connections and popping from client_queues successfully resolves the memory leak.',
+      file: 'apps/api-gateway/app/main.py',
+      line: 42,
+      severity: 'PASSED',
+      rule: 'Concurrency Safety',
+      message: 'Distributed Redis Redlock with jitter prevents race condition and lock starvation.',
     },
     {
-      id: 'f2',
-      file: 'apps/api-gateway/app/services/llm_pricing_service.py',
-      line: 763,
-      severity: 'POSITIVE',
-      comment: 'Implemented robust start_weekly_scheduler_loop with sleep_duration safeguards against zero TTL loops.',
+      file: 'packages/cache/src/semantic_cache.py',
+      line: 78,
+      severity: 'PASSED',
+      rule: 'Memory Leak & Cache GC',
+      message: 'LRU evictions bounded at 75% memory footprint, leaving 25% for Garbage Collection.',
     },
     {
-      id: 'f3',
-      file: 'apps/api-gateway/app/services/__init__.py',
-      line: 1,
-      severity: 'INFO',
-      comment: 'Clean package namespace: Removed eager circular cross-imports.',
+      file: 'deploy/k8s/resilient-app/templates/scaledobject.yaml',
+      line: 12,
+      severity: 'PASSED',
+      rule: 'KEDA Spot Scalability',
+      message: 'Triggers scale-up smoothly on Redis queue threshold > 5 jobs.',
     },
   ];
 
-  const handleRunReview = async () => {
-    setIsReviewing(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setIsReviewing(false);
+  const handleAutoMerge = () => {
+    setIsMerging(true);
+    setTimeout(() => {
+      setIsMerging(false);
+      setMerged(true);
+      addLiveEvent({
+        type: 'AUTO_MERGE',
+        title: 'PR #89 Auto-Merged to Main',
+        description: 'Automated 100% Quality Pass triggered auto-merge on vaagatech/tharior-remedai.',
+        severity: 'success',
+      });
+    }, 1500);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-              <GitPullRequest className="w-3.5 h-3.5 text-indigo-400" /> Automated PR Review & VCS Agent
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              GitHub & GitLab Connected
-            </span>
+    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
+              <GitPullRequest className="w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">VCS Pull Request Review & Auto-Merge Agent</h1>
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight font-heading">
-            Pull Request Review Agent & Auto-Merge Engine
-          </h2>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Autonomous multi-tier code review agent evaluates code safety, test coverage, SAST vulnerabilities, and AST structural integrity before auto-merging approved PRs.
+          <p className="text-slate-600 text-sm">
+            Automated line-by-line code review agent with AST security checks, SAST linting, and policy-driven auto-merge.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={handleRunReview}
-            disabled={isReviewing}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/20"
+            onClick={handleAutoMerge}
+            disabled={isMerging || merged}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer ${
+              merged
+                ? 'bg-purple-600 text-white'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+            }`}
           >
-            <RotateCw className={`w-3.5 h-3.5 ${isReviewing ? 'animate-spin' : ''}`} />
-            {isReviewing ? 'Analyzing PR Diffs...' : 'Run Autonomous Review'}
+            {isMerging ? (
+              <>
+                <RotateCw className="w-4 h-4 animate-spin" />
+                Auto-Merging...
+              </>
+            ) : merged ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                Merged to Main
+              </>
+            ) : (
+              <>
+                <GitMerge className="w-4 h-4" />
+                100% Quality Pass: Trigger Auto-Merge
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Main Review Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: VCS Configuration & Target PR (4 Cols) */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4 text-xs">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <GitPullRequest className="w-4 h-4 text-indigo-400" /> VCS Repository & Target PR
+      {/* PR Summary Card */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-mono font-bold rounded">
+              PR #89
+            </span>
+            <h3 className="font-bold text-slate-900 text-sm">
+              fix(cache): introduce distributed jitter lock for Redis cluster
             </h3>
-
-            <div>
-              <label className="text-slate-300 font-medium block mb-1">Target Repository</label>
-              <input
-                type="text"
-                value={targetRepo}
-                onChange={(e) => setTargetRepo(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="text-slate-300 font-medium block mb-1">Pull Request #</label>
-              <input
-                type="text"
-                value={prNumber}
-                onChange={(e) => setPrNumber(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
-              />
-            </div>
-
-            <div className="pt-2 border-t border-slate-800 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={autoMergePolicy}
-                  onChange={(e) => setAutoMergePolicy(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-950"
-                />
-                <span className="font-semibold">Auto-Merge on 100% Quality Score</span>
-              </label>
-              <p className="text-[11px] text-slate-500 leading-relaxed pl-5">
-                Automatically merges PR if SAST score &ge;95% and Tier 10 consensus passes.
-              </p>
-            </div>
           </div>
+          <span className="text-xs text-slate-500 font-mono">
+            {activeRepo?.name || 'tharior-remedai'} • branch: <strong className="text-slate-700">fix/redis-cache-lock</strong>
+          </span>
         </div>
 
-        {/* Right Column: Review Report & Line-by-Line Annotations (8 Cols) */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Review Findings for PR #{prNumber}
-                </h3>
-                <span className="text-xs text-slate-400">Branch: <strong>fix/ws-memory-leak-broadcast</strong> &rarr; <strong>main</strong></span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <Check className="w-3.5 h-3.5" /> APPROVED (Score: 98/100)
-                </span>
-              </div>
-            </div>
-
-            {/* Findings List */}
-            <div className="space-y-3">
-              {findings.map((f) => (
-                <div key={f.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-2 text-xs">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-mono text-indigo-300 flex items-center gap-1.5">
-                      <FileCode className="w-3.5 h-3.5 text-slate-400" /> {f.file}:{f.line}
+        {/* Findings List */}
+        <div className="space-y-3">
+          <h4 className="text-xs font-bold uppercase text-slate-600">Automated Review Findings</h4>
+          <div className="space-y-2">
+            {mockFindings.map((f, i) => (
+              <div
+                key={i}
+                className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="font-mono text-xs font-bold text-slate-800">{f.file}:{f.line}</span>
+                    <span className="px-2 py-0.2 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded uppercase">
+                      {f.rule}
                     </span>
-                    <span className="text-emerald-400 font-semibold uppercase">{f.severity}</span>
                   </div>
-                  <p className="text-slate-300 text-xs leading-relaxed">{f.comment}</p>
+                  <p className="text-xs text-slate-600 pl-6">{f.message}</p>
                 </div>
-              ))}
-            </div>
 
-            <div className="flex justify-between items-center pt-3 border-t border-slate-800 text-xs">
-              <span className="text-slate-400">SAST Clean • Unit Tests 14/14 Passed • Zero Regressions</span>
-              <button className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-600/20">
-                <Check className="w-3.5 h-3.5" /> Execute Safe Merge to Main
-              </button>
-            </div>
+                <span className="text-xs font-bold text-emerald-600 shrink-0">100% COMPLIANT</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
     </div>
   );
-}
+};

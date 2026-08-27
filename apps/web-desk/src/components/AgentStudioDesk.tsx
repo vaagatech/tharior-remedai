@@ -1,402 +1,383 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Terminal,
-  Play,
-  RotateCcw,
-  Sparkles,
-  Layers,
-  Code,
-  CheckCircle2,
-  Cpu,
-  Search,
-  Check,
   Bot,
-  BrainCircuit,
-  DollarSign,
-  Clock,
-  Shield,
-  FileCode2,
+  Sparkles,
+  Play,
+  CheckCircle2,
+  Code2,
+  Terminal,
+  Cpu,
+  RotateCw,
+  FolderGit2,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
-import type { TierLevel, PromptExecutionRequest } from '../types';
 
-export function AgentStudioDesk() {
+export const AgentStudioDesk: React.FC = () => {
   const {
-    activePrompt,
-    setActivePrompt,
-    selectedAgentRole,
-    setSelectedAgentRole,
-    selectedTier,
-    setSelectedTier,
-    isExecutingPrompt,
-    promptExecutionOutput,
-    promptThoughtTrace,
-    promptCodeDiff,
-    executePrompt,
-    clearPromptStudio,
-    tierSpecs,
+    activeRepo,
+    lastRoutingDecision,
+    evaluateSystemRouting,
+    addLiveEvent,
+    setActiveTab,
   } = useRemedaiStore();
 
-  const [codeContext, setCodeContext] = useState<string>(
-    `# Target Module: apps/api-gateway/app/core/event_bus.py\nclass EventBus:\n    def __init__(self):\n        self.active_connections = set()\n        self.client_queues = {}\n\n    async def disconnect(self, websocket: WebSocket):\n        # Fix needed: unregister socket and flush queue\n        pass`
+  const [prompt, setPrompt] = useState(
+    'Refactor Redis distributed cache lock in apps/api-gateway/app/main.py to prevent orphaned TTL locks during high concurrency spikes.'
   );
-  const [filePath, setFilePath] = useState('apps/api-gateway/app/core/event_bus.py');
-  const [repoName] = useState('vaagatech/tharior-remedai');
-  const [enableInternetSearch, setEnableInternetSearch] = useState(true);
-  const [enableASTInspection, setEnableASTInspection] = useState(true);
-  const [consensusMode, setConsensusMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'prompt' | 'diff' | 'ast' | 'trace'>('prompt');
-  const [appliedNotification, setAppliedNotification] = useState(false);
+  const [selectedAgentRole, setSelectedAgentRole] = useState<'coder' | 'architect' | 'security' | 'reviewer'>('coder');
+  const [reflectionEnabled, setReflectionEnabled] = useState(true);
+  const [internetSearchEnabled, setInternetSearchEnabled] = useState(false);
+  const [autoApplyDiff, setAutoApplyDiff] = useState(true);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
+  const [generatedDiff, setGeneratedDiff] = useState<string | null>(null);
+  const [reflectionThoughts, setReflectionThoughts] = useState<string[]>([]);
 
-  const currentTierSpec = tierSpecs.find((t) => t.tier === selectedTier) || tierSpecs[4];
+  // Auto-evaluate system routing as user types prompt
+  useEffect(() => {
+    if (prompt.trim().length > 10) {
+      evaluateSystemRouting(prompt, activeRepo?.name);
+    }
+  }, [prompt, activeRepo]);
 
-  const handleRun = async () => {
-    if (!activePrompt.trim()) return;
-    const req: PromptExecutionRequest = {
-      prompt: activePrompt,
-      code_context: codeContext,
-      file_path: filePath,
-      repo_name: repoName,
-      agent_role: selectedAgentRole,
-      target_tier: consensusMode ? 'tier_10_elite_consensus' : selectedTier,
-      enable_internet_search: enableInternetSearch,
-      enable_ast_inspection: enableASTInspection,
-      consensus_mode: consensusMode,
-    };
-    await executePrompt(req);
-    setActiveTab('diff');
-  };
+  const handleRunAgent = () => {
+    if (!prompt.trim()) return;
 
-  const handleApplyFix = () => {
-    setAppliedNotification(true);
-    setTimeout(() => setAppliedNotification(false), 3000);
+    setIsExecuting(true);
+    setExecutionLogs([]);
+    setGeneratedDiff(null);
+    setReflectionThoughts([]);
+
+    const decision = evaluateSystemRouting(prompt, activeRepo?.name);
+
+    addLiveEvent({
+      type: 'AGENT_DISPATCH',
+      title: `Agent Studio Dispatched to ${decision.recommended_tier_name}`,
+      description: `Model ${decision.recommended_model_name} processing prompt with ${selectedAgentRole.toUpperCase()} specialist role.`,
+      tier: decision.recommended_tier,
+      model: decision.recommended_model_name,
+      severity: 'info',
+    });
+
+    const logs: string[] = [
+      `[Router] System dynamic routing evaluated complexity: ${decision.complexity_score}/10`,
+      `[Router] Selected optimal model: ${decision.recommended_model_name} (${decision.recommended_tier_name})`,
+      `[Context] Parsed AST symbol tables from ${activeRepo?.name || 'tharior-remedai'} (est. ${decision.context_tokens_est} tokens)`,
+      `[Agent] Initializing ${selectedAgentRole.toUpperCase()} specialist with reflection thought loop...`,
+    ];
+
+    setExecutionLogs([...logs]);
+
+    setTimeout(() => {
+      setReflectionThoughts([
+        '1. Inspecting lock acquisition logic in main.py: Line 42 lacks distributed lease jitter.',
+        '2. Verifying potential race conditions: Multiple async coroutines could compete on expired lock key.',
+        '3. Formulating patch: Introduce Redis Redlock lease renewal with exponential jitter and fallback release.',
+        '4. Validating AST syntax and type hints: 0 lint errors, 100% compliant with Python 3.12 asyncio specs.',
+      ]);
+
+      setExecutionLogs((prev) => [
+        ...prev,
+        `[AST Engine] Syntax tree transformed with zero semantic regressions.`,
+        `[Test Harness] Executed 14 automated unit tests: 14/14 PASSED in 180ms.`,
+        `[PR Agent] Diff patch ready for 1-click apply.`,
+      ]);
+
+      setGeneratedDiff(
+`diff --git a/apps/api-gateway/app/main.py b/apps/api-gateway/app/main.py
+index a12b4cd..e45f678 100644
+--- a/apps/api-gateway/app/main.py
++++ b/apps/api-gateway/app/main.py
+@@ -38,12 +38,18 @@ async def acquire_redis_lock(key: str, ttl_seconds: int = 30):
+-    # Acquire simple lock without lease renewal
+-    lock = await redis_client.set(f"lock:{key}", "1", nx=True, ex=ttl_seconds)
+-    return lock
++    # Autonomous Remediation: Distributed Jitter Lock with Safe Auto-Renewal
++    jitter_ms = random.randint(10, 50) / 1000.0
++    lock_token = str(uuid.uuid4())
++    acquired = await redis_client.set(
++        f"lock:{key}", lock_token, nx=True, ex=ttl_seconds
++    )
++    if acquired:
++        asyncio.create_task(auto_renew_lease(key, lock_token, ttl_seconds))
++        return lock_token
++    await asyncio.sleep(jitter_ms)
++    return None`
+      );
+
+      setIsExecuting(false);
+
+      addLiveEvent({
+        type: 'DIFF_GENERATED',
+        title: 'Patch Generated with 100% Test Passing',
+        description: `Autonomous agent successfully generated unified diff for ${activeRepo?.name || 'tharior-remedai'}.`,
+        severity: 'success',
+      });
+    }, 2000);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-          <Bot className="w-48 h-48 text-indigo-400" />
-        </div>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Developer Direct Prompt IDE
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                A2A Agentic Reflection Active
-              </span>
+    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+      {/* Top Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
+              <Bot className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-bold text-white tracking-tight font-heading">
-              Agent Prompt Studio & Code Remediation Workspace
-            </h2>
-            <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-              Directly author prompts, assign autonomous specialist agents, select multi-dimensional LLM tiers, and inspect live reflection traces & synthesized code diffs.
-            </p>
+            <h1 className="text-2xl font-bold text-slate-900">Agent Studio & Direct Prompt IDE</h1>
           </div>
+          <p className="text-slate-600 text-sm">
+            Provide prompts or target AST symbols. The <strong>System Intelligent Router</strong> autonomously analyzes task complexity and selects the optimal tier & LLM.
+          </p>
+        </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={clearPromptStudio}
-              className="px-3.5 py-2 rounded-xl text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Reset Studio
-            </button>
-            <button
-              onClick={handleRun}
-              disabled={isExecutingPrompt || !activePrompt.trim()}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-lg ${
-                isExecutingPrompt
-                  ? 'bg-indigo-700 text-indigo-200 cursor-not-allowed opacity-80 animate-pulse'
-                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
-              }`}
-            >
-              <Play className="w-4 h-4 fill-current" />
-              {isExecutingPrompt ? 'Autonomous Agent Synthesizing...' : 'Execute Agent Fix'}
-            </button>
+        <div className="flex items-center gap-3">
+          <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center gap-2">
+            <FolderGit2 className="w-4 h-4 text-indigo-600" />
+            <span className="text-slate-600">Active Repo: <strong className="text-slate-900">{activeRepo?.name || 'tharior-remedai'}</strong></span>
           </div>
         </div>
       </div>
 
-      {appliedNotification && (
-        <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 px-4 py-3 rounded-xl flex items-center gap-2 text-xs animate-in fade-in duration-200">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>Synthesized patch successfully committed to active branch <strong>fix/ws-memory-leak-broadcast</strong>! PR #42 created.</span>
+      {/* Autonomous System Intelligent Routing Card */}
+      {lastRoutingDecision && (
+        <div className="bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/70 border border-indigo-100 rounded-2xl p-5 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100/60 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-indigo-600 text-white rounded-lg">
+                <Cpu className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
+                  Autonomous System Routing Decision (System Controlled)
+                </div>
+                <div className="text-sm font-bold text-slate-900">
+                  {lastRoutingDecision.recommended_tier_name}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-white border border-indigo-200 text-indigo-700 rounded-full text-xs font-semibold shadow-2xs">
+                Model: {lastRoutingDecision.recommended_model_name}
+              </span>
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-medium">
+                Complexity: {lastRoutingDecision.complexity_score}/10
+              </span>
+              <span className="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-xs font-medium">
+                Confidence: {lastRoutingDecision.confidence_score.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-600 leading-relaxed">
+            <strong className="text-slate-800">System Rationale: </strong>
+            {lastRoutingDecision.reasoning_rationale}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase">AST Features:</span>
+            {lastRoutingDecision.ast_features_detected.map((feat) => (
+              <span key={feat} className="px-2 py-0.5 bg-white text-slate-700 text-xs font-mono rounded border border-slate-200 shadow-2xs">
+                {feat}
+              </span>
+            ))}
+            <span className="ml-auto text-[11px] text-slate-500">
+              Estimated Budget Impact: <strong className="text-slate-800 font-mono">{lastRoutingDecision.budget_impact}</strong>
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Main Grid: Left Controls & Prompting / Right Execution Output & Diff */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Configuration & Prompt Editor (7 Cols) */}
-        <div className="lg:col-span-7 space-y-5">
-          {/* Agent Role & Tier Selector Bar */}
-          <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-sm space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Agent Specialist Role */}
-              <div>
-                <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5 mb-1.5">
-                  <Bot className="w-3.5 h-3.5 text-indigo-400" /> Specialist Agent Persona
-                </label>
-                <select
-                  value={selectedAgentRole}
-                  onChange={(e) => setSelectedAgentRole(e.target.value as any)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition"
+      {/* Main Studio Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Prompt & Config Editor (2 cols) */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Developer Prompt / Coding Intent
+              </label>
+              <textarea
+                rows={5}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe your bug fix, feature, refactoring, or AST transform requirement in detail..."
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white leading-relaxed font-sans"
+              />
+            </div>
+
+            {/* Specialist Role Selection */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                Autonomous Specialist Agent Role
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { id: 'coder', name: 'Code Engineer', desc: 'Direct Code Fixes & AST Patches' },
+                  { id: 'architect', name: 'System Architect', desc: 'Multi-Module & Scalability' },
+                  { id: 'security', name: 'SAST Security Guard', desc: 'Zero-Day & Vulnerability Fix' },
+                  { id: 'reviewer', name: 'PR Reviewer', desc: 'Code Quality & Lint Guard' },
+                ].map((role) => (
+                  <button
+                    type="button"
+                    key={role.id}
+                    onClick={() => setSelectedAgentRole(role.id as any)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      selectedAgentRole === role.id
+                        ? 'bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-500/20'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="font-bold text-xs text-slate-900">{role.name}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 truncate">{role.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Toggle Controls */}
+            <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+                <input
+                  type="checkbox"
+                  checked={reflectionEnabled}
+                  onChange={(e) => setReflectionEnabled(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 w-4 h-4"
+                />
+                <span>Multi-Turn Reflection Chain</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+                <input
+                  type="checkbox"
+                  checked={internetSearchEnabled}
+                  onChange={(e) => setInternetSearchEnabled(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 w-4 h-4"
+                />
+                <span>Web Search Plugin (Docs / CVEs)</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-slate-700 font-medium">
+                <input
+                  type="checkbox"
+                  checked={autoApplyDiff}
+                  onChange={(e) => setAutoApplyDiff(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 w-4 h-4"
+                />
+                <span>Auto-Apply Verified Diff</span>
+              </label>
+            </div>
+
+            {/* Execute Button */}
+            <div className="pt-2">
+              <button
+                onClick={handleRunAgent}
+                disabled={isExecuting || !prompt.trim()}
+                className="w-full flex items-center justify-center gap-2 py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer text-sm"
+              >
+                {isExecuting ? (
+                  <>
+                    <RotateCw className="w-4 h-4 animate-spin" />
+                    Autonomous Agent Executing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-white" />
+                    Dispatch Autonomous Agent (System Routed)
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Generated Code Diff Viewer */}
+          {generatedDiff && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Code2 className="w-4 h-4 text-emerald-600" />
+                  <h3 className="font-bold text-slate-900 text-sm">Generated AST Code Diff</h3>
+                </div>
+                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-medium">
+                  Verified & Ready
+                </span>
+              </div>
+
+              <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl font-mono text-xs overflow-x-auto leading-relaxed border border-slate-800">
+                {generatedDiff}
+              </pre>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    addLiveEvent({
+                      type: 'PR_REVIEW',
+                      title: 'Pull Request Created from Studio Patch',
+                      description: 'Opened automated PR #91 on vaagatech/tharior-remedai for review.',
+                      severity: 'success',
+                    });
+                    setActiveTab('pr-review');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-all cursor-pointer shadow-sm"
                 >
-                  <option value="coder">👨‍💻 Autonomous Senior Coder (Code & Tests)</option>
-                  <option value="architect">🏛️ System & AST Architect (Refactoring)</option>
-                  <option value="bug_hunter">🎯 Precision Bug Hunter (Root Cause)</option>
-                  <option value="sast_guard">🛡️ SAST & Security Guard (CVE Hardening)</option>
-                  <option value="pr_reviewer">🔍 Comprehensive PR Reviewer</option>
-                  <option value="autonomous_lead">👑 Autonomous Remediation Lead (A2A Coordinator)</option>
-                </select>
-              </div>
-
-              {/* LLM Tier Selection */}
-              <div>
-                <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5 mb-1.5">
-                  <Layers className="w-3.5 h-3.5 text-cyan-400" /> Assigned LLM Tier (1-10)
-                </label>
-                <select
-                  value={selectedTier}
-                  onChange={(e) => setSelectedTier(e.target.value as TierLevel)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition"
-                >
-                  {tierSpecs.map((spec) => (
-                    <option key={spec.tier} value={spec.tier}>
-                      Tier {spec.tier_number}: {spec.name} (${spec.input_cost_per_1m_usd}/1M)
-                    </option>
-                  ))}
-                </select>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Apply Patch & Open PR
+                </button>
               </div>
             </div>
-
-            {/* Active Tier Capability Micro-Badge */}
-            <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-bold">
-                  Tier {currentTierSpec.tier_number}
-                </span>
-                <span className="text-slate-300 font-medium">{currentTierSpec.representative_models[0]}</span>
-              </div>
-              <div className="flex items-center gap-4 text-[11px] text-slate-400">
-                <span className="flex items-center gap-1">
-                  <DollarSign className="w-3 h-3 text-emerald-400" />
-                  ${currentTierSpec.input_cost_per_1m_usd} in / ${currentTierSpec.output_cost_per_1m_usd} out
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-amber-400" />
-                  {currentTierSpec.est_latency_ms}ms
-                </span>
-                <span className="flex items-center gap-1">
-                  <Cpu className="w-3 h-3 text-cyan-400" />
-                  Reasoning: {currentTierSpec.reasoning_level}
-                </span>
-              </div>
-            </div>
-
-            {/* Feature Checkbox Toggles */}
-            <div className="flex flex-wrap items-center gap-4 pt-1 text-xs">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={enableInternetSearch}
-                  onChange={(e) => setEnableInternetSearch(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-950"
-                />
-                <Search className="w-3.5 h-3.5 text-blue-400" /> Web Search Tooling (OpenRouter Plugin)
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={enableASTInspection}
-                  onChange={(e) => setEnableASTInspection(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-950"
-                />
-                <BrainCircuit className="w-3.5 h-3.5 text-purple-400" /> Deep AST & Symbol Parser
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={consensusMode}
-                  onChange={(e) => setConsensusMode(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-950"
-                />
-                <Shield className="w-3.5 h-3.5 text-amber-400" /> Tier 10 Consensus Voting Council
-              </label>
-            </div>
-          </div>
-
-          {/* Prompt Writing Area */}
-          <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-sm space-y-3">
-            <div className="flex justify-between items-center">
-              <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <Terminal className="w-4 h-4 text-indigo-400" /> Instruction & Remediation Prompt
-              </label>
-              <span className="text-[11px] text-slate-500">Markdown & code syntax supported</span>
-            </div>
-            <textarea
-              value={activePrompt}
-              onChange={(e) => setActivePrompt(e.target.value)}
-              placeholder="Describe the bug, refactoring goal, or feature request in detail. Example: 'Fix the memory leak in WebSocket stream handlers where client listeners are not unregistered during connection timeout.'"
-              rows={4}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition font-mono leading-relaxed resize-y"
-            />
-          </div>
-
-          {/* Code Context & Target File */}
-          <div className="bg-slate-900/90 border border-slate-800/80 rounded-xl p-4 shadow-sm space-y-3">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-              <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                <FileCode2 className="w-4 h-4 text-cyan-400" /> Target File & Code Snippet Context
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={filePath}
-                  onChange={(e) => setFilePath(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300 w-64 focus:outline-none focus:border-indigo-500"
-                  placeholder="Target path (e.g. app/core/event_bus.py)"
-                />
-              </div>
-            </div>
-            <textarea
-              value={codeContext}
-              onChange={(e) => setCodeContext(e.target.value)}
-              rows={6}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-300 font-mono focus:outline-none focus:border-indigo-500 transition leading-relaxed resize-y"
-            />
-          </div>
+          )}
         </div>
 
-        {/* Right Column: Execution Output, Diff Viewer, & Reflection Traces (5 Cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Navigation Sub-Tabs */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setActiveTab('diff')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'diff'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <Code className="w-3.5 h-3.5" /> Synthesized Diff
-              </button>
-              <button
-                onClick={() => setActiveTab('trace')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'trace'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <BrainCircuit className="w-3.5 h-3.5" /> Agent Reflection Trace
-              </button>
-              <button
-                onClick={() => setActiveTab('prompt')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'prompt'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5" /> Console
-              </button>
+        {/* Live Execution Logs & Reflection Loop (1 col) */}
+        <div className="space-y-6">
+          {/* Reflection Thoughts */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <h3 className="font-bold text-slate-900 text-sm">Reflection Thought Trace</h3>
             </div>
 
-            {promptCodeDiff && (
-              <button
-                onClick={handleApplyFix}
-                className="px-3 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1 cursor-pointer shadow-md shadow-emerald-600/20"
-              >
-                <Check className="w-3.5 h-3.5" /> 1-Click Apply & PR
-              </button>
+            {reflectionThoughts.length > 0 ? (
+              <div className="space-y-2">
+                {reflectionThoughts.map((thought, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 text-xs text-purple-900 leading-relaxed font-sans"
+                  >
+                    {thought}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-10 text-center text-slate-400 text-xs">
+                No active execution. Enter a prompt and dispatch the agent.
+              </div>
             )}
           </div>
 
-          {/* Tab 1: Synthesized Code Diff */}
-          {activeTab === 'diff' && (
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 min-h-[420px] flex flex-col justify-between">
-              {promptCodeDiff ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-2">
-                    <span className="font-mono text-indigo-300">Unified Patch Diff ({filePath})</span>
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Passed 14 Tests
-                    </span>
+          {/* Real-time Execution Logs */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Terminal className="w-4 h-4 text-indigo-600" />
+              <h3 className="font-bold text-slate-900 text-sm">Execution Telemetry</h3>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-700 space-y-1.5 max-h-56 overflow-y-auto">
+              {executionLogs.length > 0 ? (
+                executionLogs.map((log, i) => (
+                  <div key={i} className="leading-tight">
+                    {log}
                   </div>
-                  <pre className="text-[11px] font-mono text-slate-200 bg-slate-900/90 p-3 rounded-lg overflow-x-auto border border-slate-800 leading-relaxed whitespace-pre-wrap">
-                    {promptCodeDiff.split('\n').map((line, idx) => {
-                      let color = 'text-slate-300';
-                      if (line.startsWith('+')) color = 'text-emerald-400 bg-emerald-950/30';
-                      else if (line.startsWith('-')) color = 'text-rose-400 bg-rose-950/30';
-                      else if (line.startsWith('@@')) color = 'text-cyan-400 font-bold';
-                      return (
-                        <div key={idx} className={`${color} px-1 rounded`}>
-                          {line}
-                        </div>
-                      );
-                    })}
-                  </pre>
-                </div>
+                ))
               ) : (
-                <div className="flex flex-col items-center justify-center my-auto text-slate-500 text-xs py-16 text-center space-y-2">
-                  <Code className="w-8 h-8 text-slate-600" />
-                  <p>No patch synthesized yet.</p>
-                  <p className="text-[11px] text-slate-600 max-w-xs">
-                    Write your prompt on the left and click <strong>Execute Agent Fix</strong> to generate verified code.
-                  </p>
-                </div>
+                <div className="text-slate-400">Agent telemetry ready...</div>
               )}
             </div>
-          )}
-
-          {/* Tab 2: Agent Reflection & Thought Trace */}
-          {activeTab === 'trace' && (
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 min-h-[420px] space-y-3">
-              <div className="text-xs font-bold text-slate-300 border-b border-slate-800 pb-2 flex items-center gap-2">
-                <BrainCircuit className="w-4 h-4 text-purple-400" /> Autonomous Thought Chain & Self-Reflection
-              </div>
-              {promptThoughtTrace.length > 0 ? (
-                <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-                  {promptThoughtTrace.map((trace, idx) => (
-                    <div key={idx} className="bg-slate-900/80 border border-slate-800 rounded-lg p-2.5 text-xs space-y-1">
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span className="font-semibold text-indigo-300">{trace.step}</span>
-                        <span>{trace.time}</span>
-                      </div>
-                      <p className="text-slate-300 text-[11px] leading-relaxed">{trace.thought}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center my-auto text-slate-500 text-xs py-16 text-center space-y-2">
-                  <BrainCircuit className="w-8 h-8 text-slate-600" />
-                  <p>No active reflection chain.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tab 3: Console Output */}
-          {activeTab === 'prompt' && (
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 min-h-[420px] font-mono text-xs text-slate-300 space-y-2">
-              <div className="text-slate-400 text-[11px] border-b border-slate-800 pb-2 flex items-center justify-between">
-                <span>Agent Execution Terminal</span>
-                <span>Role: {selectedAgentRole}</span>
-              </div>
-              <pre className="text-emerald-400 text-[11px] whitespace-pre-wrap leading-relaxed">
-                {promptExecutionOutput || '> Agent Studio ready. Awaiting developer execution...'}
-              </pre>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
   );
-}
+};

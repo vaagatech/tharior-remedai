@@ -1,589 +1,307 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Layers,
-  Search,
   RefreshCw,
-  Settings,
-  Database,
-  Globe,
-  CheckCircle2,
-  Volume2,
-  Video,
-  Image as ImageIcon,
-  ChevronUp,
-  ChevronDown,
   Sliders,
-  FileText,
+  Clock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
+import type { TierLevel } from '../types';
 
-export function ModelCatalogDesk() {
+export const ModelCatalogDesk: React.FC = () => {
   const {
     tierSpecs,
-    multimodalSpecs,
-    customerConfig,
+    customerOverrides,
     setTierShift,
-    toggleAllowedModel,
-    setPreferFreeModels,
-    setCustomOpenRouterUrl,
-    setCustomOpenRouterKey,
+    togglePreferFreeModels,
+    setRefreshInterval,
+    syncOpenRouterCatalog,
   } = useRemedaiStore();
 
-  const [activeTab, setActiveTab] = useState<'tiers' | 'models' | 'multimodal' | 'cache_search'>('tiers');
-  const [searchFilter, setSearchFilter] = useState('');
-  const [freeOnly, setFreeOnly] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [expandedTier, setExpandedTier] = useState<TierLevel | null>(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [searchPluginEnabled, setSearchPluginEnabled] = useState(true);
 
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    await syncOpenRouterCatalog();
+    setTimeout(() => setIsSyncing(false), 1200);
   };
-
-  const handleRefreshOpenRouter = async () => {
-    setIsRefreshing(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setIsRefreshing(false);
-    showToast('OpenRouter Catalog & Pricing Refreshed Successfully (284 models evaluated)');
-  };
-
-  const getShiftedTier = (baseTierNumber: number, shift: number): number => {
-    return Math.max(1, Math.min(10, baseTierNumber + shift));
-  };
-
-  const allModelsList = tierSpecs.flatMap((tierSpec) =>
-    tierSpec.representative_models.map((modelId) => {
-      const isFree = modelId.includes(':free') || tierSpec.input_cost_per_1m_usd === 0;
-      const shift = customerConfig.tier_shifts[modelId] || 0;
-      const effectiveTierNum = getShiftedTier(tierSpec.tier_number, shift);
-      return {
-        id: modelId,
-        baseTierNum: tierSpec.tier_number,
-        baseTierName: tierSpec.name,
-        shift,
-        effectiveTierNum,
-        effectiveTierSpec: tierSpecs.find((t) => t.tier_number === effectiveTierNum) || tierSpec,
-        isFree,
-        isAllowed: customerConfig.allowed_models.includes(modelId),
-        inputCost: isFree ? 0 : tierSpec.input_cost_per_1m_usd,
-        outputCost: isFree ? 0 : tierSpec.output_cost_per_1m_usd,
-        latencyMs: tierSpec.est_latency_ms,
-        benchmarks: tierSpec.benchmarks,
-      };
-    })
-  );
-
-  const filteredModels = allModelsList.filter((m) => {
-    if (freeOnly && !m.isFree) return false;
-    if (searchFilter.trim()) {
-      const q = searchFilter.toLowerCase();
-      return m.id.toLowerCase().includes(q) || m.baseTierName.toLowerCase().includes(q);
-    }
-    return true;
-  });
 
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" /> 10-Tier Dynamic LLM Registry & Orchestration
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Live OpenRouter Weekly Cache
-            </span>
+    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Top Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
+              <Layers className="w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">10-Tier Model Catalog Matrix</h1>
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight font-heading">
-            Tiered LLM Orchestration, Pricing Matrix & Multimodal Tiers
-          </h2>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Live evaluation of all 10 LLM tiers with automated weekly pricing ingestion, customer tier shifts (±1 to ±2 tiers), free model prioritization, multimodal pipelines, and semantic caching.
+          <p className="text-slate-600 text-sm">
+            N models registered per tier with dynamic load balancing, automated OpenRouter pricing sync, and customer ±2 tier overrides.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setShowConfigModal(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60 transition flex items-center gap-1.5 cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-xl border border-slate-200 text-xs transition-all cursor-pointer"
           >
-            <Settings className="w-3.5 h-3.5" /> Configure Ingestion
+            <Sliders className="w-4 h-4 text-slate-500" />
+            Tiering Policies & Sync Config
           </button>
+
           <button
-            onClick={handleRefreshOpenRouter}
-            disabled={isRefreshing}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/20"
+            onClick={handleSyncNow}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-xs transition-all shadow-sm cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Syncing OpenRouter...' : 'Refresh OpenRouter Models'}
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            Sync OpenRouter Catalog
           </button>
         </div>
       </div>
 
-      {toastMsg && (
-        <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 px-4 py-3 rounded-xl flex items-center gap-2 text-xs animate-in fade-in duration-200">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{toastMsg}</span>
+      {/* Filter and Highlights Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Total System Tiers</div>
+            <div className="text-xl font-bold text-slate-900">10 Discrete Tiers</div>
+          </div>
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+            <Layers className="w-5 h-5" />
+          </div>
         </div>
-      )}
 
-      {/* Tabs Navigation */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('tiers')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-              activeTab === 'tiers'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            <Layers className="w-4 h-4" /> 10-Tier Architectural Matrix (All Tiers)
-          </button>
-          <button
-            onClick={() => setActiveTab('models')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-              activeTab === 'models'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            <Sliders className="w-4 h-4" /> Model Overrides & ±2 Tier Shifts ({allModelsList.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('multimodal')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-              activeTab === 'multimodal'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            <Video className="w-4 h-4" /> Multimodal Audio / Video / Image Tiers
-          </button>
-          <button
-            onClick={() => setActiveTab('cache_search')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
-              activeTab === 'cache_search'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-            }`}
-          >
-            <Globe className="w-4 h-4" /> Semantic Cache & Tooling Plugins
-          </button>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Free Models Prioritization</div>
+            <div className="text-sm font-bold text-emerald-600">
+              {customerOverrides.prefer_free_models ? 'Enabled (0-Cost Auto-Routing)' : 'Disabled'}
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={customerOverrides.prefer_free_models}
+              onChange={(e) => togglePreferFreeModels(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+          </label>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase text-slate-500">Sync Interval</div>
+            <div className="text-sm font-bold text-slate-800">
+              Every {customerOverrides.refresh_interval_hours} Hours (Weekly)
+            </div>
+          </div>
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+            <Clock className="w-5 h-5" />
+          </div>
         </div>
       </div>
 
-      {/* TAB 1: Complete 10-Tier Architectural Matrix */}
-      {activeTab === 'tiers' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {tierSpecs.map((spec) => (
+      {/* 10 Tier Cards List */}
+      <div className="space-y-4">
+        {tierSpecs.map((tier) => {
+          const isExpanded = expandedTier === tier.tier;
+          return (
+            <div
+              key={tier.tier}
+              className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-all hover:border-slate-300"
+            >
+              {/* Tier Header Bar */}
               <div
-                key={spec.tier}
-                className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm hover:border-slate-700 transition flex flex-col justify-between space-y-3 relative group"
+                onClick={() => setExpandedTier(isExpanded ? null : tier.tier)}
+                className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/60"
               >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      Tier {spec.tier_number}
-                    </span>
-                    <span className="text-[11px] font-semibold text-emerald-400">
-                      {spec.cost_category}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-3.5">
+                  <span className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold flex items-center justify-center text-sm shadow-2xs">
+                    T{tier.tier_number}
+                  </span>
 
-                  <h3 className="text-sm font-bold text-white group-hover:text-indigo-300 transition">
-                    {spec.name}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{spec.description}</p>
-                </div>
-
-                <div className="bg-slate-950/80 border border-slate-800/80 rounded-lg p-3 space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400">Specialization:</span>
-                    <span className="text-slate-200 font-medium text-right">{spec.functional_specialization}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[11px]">
-                    <span className="text-slate-400">Knowledge vs Reasoning:</span>
-                    <span className="text-purple-300 font-medium">{spec.knowledge_vs_reasoning}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80 text-[11px]">
-                    <div>
-                      <span className="text-slate-500">HumanEval: </span>
-                      <strong className="text-emerald-400">{spec.benchmarks.humaneval || 'N/A'}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">SWE-Bench: </span>
-                      <strong className="text-cyan-400">{spec.benchmarks.swe_bench_verified || 'N/A'}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Speed: </span>
-                      <strong className="text-amber-400">{spec.benchmarks.tokens_per_sec || 'N/A'}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Context: </span>
-                      <strong className="text-slate-300">{spec.benchmarks.context_window || '128k'}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-xs space-y-1">
-                  <span className="text-[11px] text-slate-500 font-semibold uppercase">Models in this tier:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {spec.representative_models.map((model) => (
-                      <span
-                        key={model}
-                        className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 text-[11px] font-mono border border-slate-700/60"
-                      >
-                        {model}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: Model Overrides & ±1 to ±2 Tier Shifting */}
-      {activeTab === 'models' && (
-        <div className="space-y-4">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
-            <div className="flex items-center gap-3 flex-1 min-w-[260px]">
-              <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchFilter}
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  placeholder="Filter models by ID or tier..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={freeOnly}
-                  onChange={(e) => setFreeOnly(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-950"
-                />
-                <span className="font-semibold text-emerald-400">Free Models Only</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                <input
-                  type="checkbox"
-                  checked={customerConfig.prefer_free_models}
-                  onChange={(e) => setPreferFreeModels(e.target.checked)}
-                  className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-950"
-                />
-                <span>Auto-Prioritize Free Models in Tier</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 uppercase text-[10px]">
-                  <tr>
-                    <th className="p-3.5">Allowed</th>
-                    <th className="p-3.5">Model ID</th>
-                    <th className="p-3.5">System Base Tier</th>
-                    <th className="p-3.5 text-center">Customer Tier Shift (±2)</th>
-                    <th className="p-3.5">Effective Assigned Tier</th>
-                    <th className="p-3.5">Pricing ($/1M Tokens)</th>
-                    <th className="p-3.5">Est. Latency</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 font-mono text-slate-300">
-                  {filteredModels.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-800/30 transition">
-                      <td className="p-3.5">
-                        <button
-                          onClick={() => toggleAllowedModel(item.id)}
-                          className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition ${
-                            item.isAllowed
-                              ? 'bg-indigo-600 border-indigo-500 text-white'
-                              : 'bg-slate-950 border-slate-700 text-transparent'
-                          }`}
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                        </button>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          {item.id}
-                          {item.isFree && (
-                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-sans">
-                              FREE
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[11px]">
-                          Tier {item.baseTierNum}
-                        </span>
-                      </td>
-
-                      <td className="p-3.5 text-center">
-                        <div className="inline-flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1">
-                          <button
-                            onClick={() => setTierShift(item.id, item.shift - 1)}
-                            disabled={item.shift <= -2}
-                            title="Shift down 1 tier (-1)"
-                            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                              item.shift > 0
-                                ? 'bg-indigo-500/20 text-indigo-300'
-                                : item.shift < 0
-                                ? 'bg-amber-500/20 text-amber-300'
-                                : 'bg-slate-800 text-slate-400'
-                            }`}
-                          >
-                            {item.shift > 0 ? `+${item.shift} Tier` : item.shift < 0 ? `${item.shift} Tier` : 'System Default'}
-                          </span>
-                          <button
-                            onClick={() => setTierShift(item.id, item.shift + 1)}
-                            disabled={item.shift >= 2}
-                            title="Shift up 1 tier (+1)"
-                            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-2 font-sans">
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full font-bold text-xs ${
-                              item.effectiveTierNum !== item.baseTierNum
-                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 animate-pulse-subtle'
-                                : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
-                            }`}
-                          >
-                            Tier {item.effectiveTierNum}
-                          </span>
-                          <span className="text-[11px] text-slate-400 truncate max-w-[180px]">
-                            {item.effectiveTierSpec.name}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="p-3.5 text-slate-300">
-                        {item.isFree ? (
-                          <span className="text-emerald-400 font-bold">$0.00 (Free)</span>
-                        ) : (
-                          <span>${item.inputCost} in / ${item.outputCost} out</span>
-                        )}
-                      </td>
-
-                      <td className="p-3.5 text-slate-400">{item.latencyMs}ms</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: Multimodal Tiers */}
-      {activeTab === 'multimodal' && (
-        <div className="space-y-6">
-          {multimodalSpecs.map((group) => (
-            <div key={group.modality} className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2.5">
-                  {group.modality === 'audio' && <Volume2 className="w-5 h-5 text-amber-400" />}
-                  {group.modality === 'video' && <Video className="w-5 h-5 text-cyan-400" />}
-                  {group.modality === 'image' && <ImageIcon className="w-5 h-5 text-purple-400" />}
-                  {group.modality === 'presentation' && <FileText className="w-5 h-5 text-emerald-400" />}
                   <div>
-                    <h3 className="text-sm font-bold text-white">{group.group_name}</h3>
-                    <p className="text-xs text-slate-400">{group.description}</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-900 text-base">{tier.name}</h3>
+                      <span className="px-2 py-0.5 text-[11px] font-mono font-medium rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                        {tier.cost_category}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">{tier.description}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-xs">
+                  <div className="text-right hidden sm:block">
+                    <div className="text-slate-500 text-[11px]">Registered Models</div>
+                    <div className="font-bold text-slate-800">{tier.registered_models?.length || tier.representative_models.length} Models</div>
+                  </div>
+
+                  <div className="text-right hidden sm:block">
+                    <div className="text-slate-500 text-[11px]">Target Latency</div>
+                    <div className="font-bold text-emerald-600">{tier.est_latency_ms} ms</div>
+                  </div>
+
+                  <div className="p-1.5 text-slate-400 hover:text-slate-600">
+                    {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {group.tiers.map((t) => (
-                  <div key={t.model_id} className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                          {t.tier_level}
-                        </span>
-                        <h4 className="text-xs font-bold text-slate-100 mt-1">{t.name}</h4>
-                        <span className="text-[11px] font-mono text-slate-500">{t.model_id}</span>
-                      </div>
-                      <div className="text-right text-xs">
-                        <div className="text-emerald-400 font-bold">{t.cost_estimate}</div>
-                        <div className="text-[11px] text-slate-500">{t.latency_estimate}</div>
+              {/* Expanded Detail Panel */}
+              {isExpanded && (
+                <div className="p-6 border-t border-slate-100 bg-slate-50/40 space-y-6">
+                  {/* Benchmarks & Target Tasks */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                      <div className="text-xs font-bold uppercase text-slate-600">Target Tasks & Specialization</div>
+                      <div className="text-xs text-slate-700 font-medium">{tier.functional_specialization}</div>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {tier.target_tasks.map((task) => (
+                          <span key={task} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] border border-slate-200">
+                            {task}
+                          </span>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="text-[11px] text-slate-400 space-y-1">
-                      <div className="font-semibold text-slate-300">Capabilities:</div>
-                      <ul className="list-disc pl-4 space-y-0.5">
-                        {t.capabilities.map((c, i) => (
-                          <li key={i}>{c}</li>
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                      <div className="text-xs font-bold uppercase text-slate-600">Verified Benchmarks</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {Object.entries(tier.benchmarks).map(([k, v]) => (
+                          <div key={k} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100">
+                            <span className="text-slate-500 uppercase text-[10px] font-mono">{k.replace('_', ' ')}:</span>
+                            <span className="font-bold text-slate-800 font-mono">{v}</span>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
-      {/* TAB 4: Semantic Cache & Tooling */}
-      {activeTab === 'cache_search' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm border-b border-slate-800 pb-2">
-              <Database className="w-4 h-4" /> Semantic Prompt Caching Engine
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Accelerates repeated developer inquiries and automated CI pipeline checks by returning semantically equivalent cached embeddings above cosine similarity threshold (&gt;0.88).
-            </p>
-            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950 p-4 rounded-lg border border-slate-800">
-              <div>
-                <span className="text-slate-500">Cache Hit Rate:</span>
-                <div className="text-lg font-bold text-emerald-400">42.6%</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Total Tokens Saved:</span>
-                <div className="text-lg font-bold text-cyan-400">8.4M Tokens</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Cost Avoidance:</span>
-                <div className="text-lg font-bold text-amber-400">$64.20 USD</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Average Latency:</span>
-                <div className="text-lg font-bold text-purple-400">12ms (Cached)</div>
-              </div>
-            </div>
-          </div>
+                  {/* Registered Models List with Customer Shift Controls */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold uppercase text-slate-700 tracking-wide">
+                        Registered Models in Tier {tier.tier_number} (N Models Architecture)
+                      </h4>
+                      <span className="text-xs text-slate-500">Customer Shift Range: -2 to +2 Tiers</span>
+                    </div>
 
-          <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2 text-indigo-300 font-bold text-sm">
-                <Globe className="w-4 h-4 text-cyan-400" /> Internet Search Tooling Plugin
-              </div>
-              <button
-                onClick={() => setSearchPluginEnabled(!searchPluginEnabled)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
-                  searchPluginEnabled
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-800 text-slate-400'
-                }`}
-              >
-                {searchPluginEnabled ? 'Plugin Enabled' : 'Plugin Disabled'}
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              When enabled, autonomous remediation agents can search live documentation, package registries, and issue trackers for external library bugs and CVE advisories.
-            </p>
-            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs space-y-2">
-              <div className="flex justify-between text-slate-300">
-                <span>Provider:</span>
-                <span className="font-mono text-cyan-300">DuckDuckGo / OpenRouter Search API</span>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span>Plugin Status:</span>
-                <span className={searchPluginEnabled ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                  {searchPluginEnabled ? 'ACTIVE & ROUTABLE' : 'DISABLED'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+                    <div className="space-y-2">
+                      {tier.registered_models?.map((model) => {
+                        const shift = customerOverrides.tier_shifts[model.id] || 0;
+                        return (
+                          <div
+                            key={model.id}
+                            className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 text-sm">{model.name}</span>
+                                {model.is_free && (
+                                  <span className="px-2 py-0.2 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold rounded-full">
+                                    FREE MODEL
+                                  </span>
+                                )}
+                                <span className="text-xs font-mono text-slate-400">({model.id})</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                <span>Context: <strong className="text-slate-700 font-mono">{(model.context_length / 1000).toFixed(0)}k</strong></span>
+                                <span>Input: <strong className="text-slate-700 font-mono">${model.prompt_cost_per_1m.toFixed(2)}/1M</strong></span>
+                                <span>Output: <strong className="text-slate-700 font-mono">${model.completion_cost_per_1m.toFixed(2)}/1M</strong></span>
+                                <span>Speed: <strong className="text-slate-700 font-mono">{model.tokens_per_second} t/s</strong></span>
+                              </div>
+                            </div>
 
-      {/* Ingestion Configuration Modal */}
+                            {/* Shift Control Buttons */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 font-medium">Customer Override:</span>
+                              <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                {[-2, -1, 0, 1, 2].map((s) => (
+                                  <button
+                                    key={s}
+                                    onClick={() => setTierShift(model.id, s)}
+                                    className={`px-2.5 py-1 text-xs font-mono font-bold rounded transition-all cursor-pointer ${
+                                      shift === s
+                                        ? 'bg-indigo-600 text-white shadow-2xs'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    {s > 0 ? `+${s}` : s}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Sync Settings Modal */}
       {showConfigModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Settings className="w-4 h-4 text-indigo-400" /> OpenRouter Ingestion & Refresh Policy
-              </h3>
-              <button
-                onClick={() => setShowConfigModal(false)}
-                className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded"
-              >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-slate-900 text-lg">Tiering & OpenRouter Config</h3>
+              </div>
+              <button onClick={() => setShowConfigModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">
                 ✕
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
+            <div className="space-y-4">
               <div>
-                <label className="block text-slate-300 font-medium mb-1">OpenRouter Catalog API URL</label>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Weekly Refresh Interval</label>
+                <select
+                  value={customerOverrides.refresh_interval_hours}
+                  onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value={24}>Every 24 Hours (Daily)</option>
+                  <option value={72}>Every 72 Hours</option>
+                  <option value={168}>Every 168 Hours (Weekly - Recommended)</option>
+                  <option value={720}>Every 30 Days (Monthly)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">OpenRouter Catalog Endpoint</label>
                 <input
                   type="text"
-                  value={customerConfig.custom_openrouter_url}
-                  onChange={(e) => setCustomOpenRouterUrl(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
+                  readOnly
+                  value="https://openrouter.ai/api/v1/models"
+                  className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-mono text-slate-700"
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Custom OpenRouter API Key (Optional)</label>
-                <input
-                  type="password"
-                  value={customerConfig.custom_openrouter_key || ''}
-                  onChange={(e) => setCustomOpenRouterKey(e.target.value)}
-                  placeholder="sk-or-v1-..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Scheduled Refresh Interval</label>
-                <select
-                  value={customerConfig.refresh_interval_hours}
-                  onChange={() => {}}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value={168}>Once a Week (168 hours - Recommended)</option>
-                  <option value={72}>Every 3 Days (72 hours)</option>
-                  <option value={24}>Daily (24 hours)</option>
-                </select>
+              <div className="p-3.5 bg-indigo-50 rounded-xl border border-indigo-100 text-xs text-indigo-900 leading-relaxed">
+                OpenRouter models and active discounts are cached in the GKE Redis layer. Models are automatically evaluated and placed into the 10 tiers based on context window, coding benchmarks, and pricing.
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
               <button
                 onClick={() => setShowConfigModal(false)}
-                className="px-4 py-2 rounded-xl text-xs bg-slate-800 hover:bg-slate-700 text-slate-200"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm shadow-sm cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowConfigModal(false);
-                  showToast('Ingestion Policy Saved.');
-                }}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg"
-              >
-                Save Policy
+                Save & Close
               </button>
             </div>
           </div>
@@ -591,4 +309,4 @@ export function ModelCatalogDesk() {
       )}
     </div>
   );
-}
+};

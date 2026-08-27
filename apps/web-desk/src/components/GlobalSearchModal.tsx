@@ -1,184 +1,147 @@
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
+  Bot,
+  Layers,
+  CheckSquare,
+  Network,
+  FolderGit2,
   ArrowRight,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
-import type { SearchItem } from '../types';
 
-export function GlobalSearchModal() {
+export const GlobalSearchModal: React.FC = () => {
   const {
     isSearchModalOpen,
-    setIsSearchModalOpen,
-    globalSearchQuery,
-    setGlobalSearchQuery,
+    setSearchModalOpen,
+    setActiveTab,
     tierSpecs,
-    stories,
-    setActivePath,
+    backlogStories,
+    onboardedRepos,
   } = useRemedaiStore();
 
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [query, setQuery] = useState('');
 
-  const searchableIndex: SearchItem[] = [
-    ...tierSpecs.map((t) => ({
-      id: `tier-${t.tier_number}`,
-      title: `Tier ${t.tier_number}: ${t.name}`,
-      category: 'TIER' as const,
-      subtitle: `${t.representative_models.join(', ')} • ${t.cost_category}`,
-      path: '/tiers',
-    })),
-    ...tierSpecs.flatMap((t) =>
-      t.representative_models.map((m) => ({
-        id: `model-${m}`,
-        title: m,
-        category: 'MODEL' as const,
-        subtitle: `Assigned to Tier ${t.tier_number} (${t.name})`,
-        path: '/tiers',
-      }))
-    ),
-    ...stories.map((s) => ({
-      id: `story-${s.id}`,
-      title: `${s.key}: ${s.title}`,
-      category: 'STORY' as const,
-      subtitle: `Priority: ${s.priority} • Status: ${s.status} • Repo: ${s.repo}`,
-      path: '/issues',
-    })),
-    {
-      id: 'ws-studio',
-      title: 'Agent Prompt Studio & Direct Developer IDE',
-      category: 'TOOL' as const,
-      subtitle: 'Author remediation prompts and inspect AST diffs',
-      path: '/studio',
-    },
-    {
-      id: 'ws-sast',
-      title: 'Security SAST & Vulnerability Watcher',
-      category: 'TOOL' as const,
-      subtitle: 'Bandit & Semgrep automated security vulnerability scanner',
-      path: '/sast',
-    },
-    {
-      id: 'ws-pr',
-      title: 'PR Review Agent & VCS Integration',
-      category: 'TOOL' as const,
-      subtitle: 'Line-by-line review annotations and automated merge criteria',
-      path: '/pr-review',
-    },
-    {
-      id: 'ws-multimodal',
-      title: 'Multimodal Audio / Video / Image Studio',
-      category: 'TOOL' as const,
-      subtitle: 'Generate audio summaries, PR demo videos, and diagrams',
-      path: '/multimodal',
-    },
-    {
-      id: 'ws-observability',
-      title: 'Observability, Distributed Traces & DLQ Replay',
-      category: 'TOOL' as const,
-      subtitle: 'Zero-missed-events DLQ quarantine and circuit breakers',
-      path: '/observability',
-    },
-  ];
-
-  const filteredItems = searchableIndex.filter((item) => {
-    if (!globalSearchQuery.trim()) return true;
-    const q = globalSearchQuery.toLowerCase();
-    return (
-      item.title.toLowerCase().includes(q) ||
-      item.subtitle.toLowerCase().includes(q) ||
-      item.category.toLowerCase().includes(q)
-    );
-  }).slice(0, 8);
-
+  // Keyboard shortcut listener (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setIsSearchModalOpen(!isSearchModalOpen);
-      } else if (e.key === 'Escape' && isSearchModalOpen) {
-        setIsSearchModalOpen(false);
+        setSearchModalOpen(!isSearchModalOpen);
+      }
+      if (e.key === 'Escape' && isSearchModalOpen) {
+        setSearchModalOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchModalOpen, setIsSearchModalOpen]);
+  }, [isSearchModalOpen, setSearchModalOpen]);
 
   if (!isSearchModalOpen) return null;
 
-  const handleSelect = (item: SearchItem) => {
-    setActivePath(item.path);
-    setIsSearchModalOpen(false);
-  };
+  const results = [
+    ...onboardedRepos.map((r) => ({
+      id: r.id,
+      title: `Repo: ${r.name}`,
+      category: 'Repositories',
+      action: () => {
+        setActiveTab('repos');
+        setSearchModalOpen(false);
+      },
+      icon: FolderGit2,
+    })),
+    ...tierSpecs.map((t) => ({
+      id: t.tier,
+      title: `Tier ${t.tier_number}: ${t.name}`,
+      category: 'Model Tiers',
+      action: () => {
+        setActiveTab('catalog');
+        setSearchModalOpen(false);
+      },
+      icon: Layers,
+    })),
+    ...backlogStories.map((s) => ({
+      id: s.id,
+      title: `Issue: ${s.key} - ${s.title}`,
+      category: 'Backlog Stories',
+      action: () => {
+        setActiveTab('backlog');
+        setSearchModalOpen(false);
+      },
+      icon: CheckSquare,
+    })),
+    {
+      id: 'kg',
+      title: 'Repository Knowledge Graph (AST Symbols)',
+      category: 'Architecture',
+      action: () => {
+        setActiveTab('knowledge-graph');
+        setSearchModalOpen(false);
+      },
+      icon: Network,
+    },
+    {
+      id: 'studio',
+      title: 'Agent Studio IDE & Direct Prompts',
+      category: 'Core Agent',
+      action: () => {
+        setActiveTab('studio');
+        setSearchModalOpen(false);
+      },
+      icon: Bot,
+    },
+  ].filter((item) => item.title.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-start justify-center pt-20 px-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-          <Search className="w-5 h-5 text-indigo-400" />
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-slate-900/40 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden space-y-3 p-4">
+        <div className="flex items-center gap-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+          <Search className="w-4 h-4 text-slate-400" />
           <input
             type="text"
             autoFocus
-            value={globalSearchQuery}
-            onChange={(e) => {
-              setGlobalSearchQuery(e.target.value);
-              setSelectedIndex(0);
-            }}
-            placeholder="Search all 10 tiers, models, backlog stories, agents, playbooks, or traces..."
-            className="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none font-sans"
+            placeholder="Search tiers, models, stories, repos, AST symbols (⌘K)..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none"
           />
-          <kbd className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded font-mono border border-slate-700">
+          <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 text-[10px] text-slate-400 rounded font-mono">
             ESC
           </kbd>
         </div>
 
-        <div className="max-h-[380px] overflow-y-auto p-2 space-y-1">
-          {filteredItems.length > 0 ? (
-            filteredItems.map((item, idx) => (
-              <button
-                key={item.id}
-                onClick={() => handleSelect(item)}
-                className={`w-full text-left p-3 rounded-xl transition flex items-center justify-between gap-3 cursor-pointer ${
-                  selectedIndex === idx
-                    ? 'bg-indigo-600/20 border border-indigo-500/40 text-white'
-                    : 'hover:bg-slate-800/60 text-slate-300 border border-transparent'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider font-mono ${
-                      item.category === 'TIER'
-                        ? 'bg-indigo-500/20 text-indigo-300'
-                        : item.category === 'MODEL'
-                        ? 'bg-cyan-500/20 text-cyan-300'
-                        : item.category === 'STORY'
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-emerald-500/20 text-emerald-300'
-                    }`}
-                  >
-                    {item.category}
-                  </span>
-                  <div className="min-w-0 truncate">
-                    <div className="text-xs font-bold truncate text-slate-100">{item.title}</div>
-                    <div className="text-[11px] text-slate-400 truncate">{item.subtitle}</div>
+        {/* Results List */}
+        <div className="max-h-80 overflow-y-auto space-y-1 pt-1">
+          {results.length > 0 ? (
+            results.map((res) => {
+              const Icon = res.icon;
+              return (
+                <div
+                  key={res.id}
+                  onClick={res.action}
+                  className="flex items-center justify-between p-3 rounded-xl hover:bg-indigo-50/70 hover:border-indigo-100 border border-transparent transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <div className="p-2 bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-600 rounded-lg transition-colors">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="truncate">
+                      <div className="font-semibold text-xs text-slate-900 group-hover:text-indigo-950 truncate">
+                        {res.title}
+                      </div>
+                      <div className="text-[10px] text-slate-400">{res.category}</div>
+                    </div>
                   </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-500 flex-shrink-0" />
-              </button>
-            ))
-          ) : (
-            <div className="p-8 text-center text-slate-500 text-xs">
-              No matching tiers, models, or stories found.
-            </div>
-          )}
-        </div>
 
-        <div className="p-3 bg-slate-950/80 border-t border-slate-800 flex justify-between items-center text-[11px] text-slate-400">
-          <div className="flex items-center gap-2">
-            <span>Press <kbd className="bg-slate-800 px-1 py-0.5 rounded text-slate-300 font-mono">⌘K</kbd> anytime to open</span>
-          </div>
-          <div>Tharior Remedai Global Search Index</div>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                </div>
+              );
+            })
+          ) : (
+            <div className="py-8 text-center text-xs text-slate-400">No matching results found.</div>
+          )}
         </div>
       </div>
     </div>
   );
-}
+};
