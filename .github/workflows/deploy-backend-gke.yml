@@ -105,10 +105,9 @@ jobs:
 
           echo "Building multi-stage container image: $IMAGE_URI"
           docker build \
-            -f apps/api-gateway/Dockerfile \
             -t "$IMAGE_URI" \
             -t "$LATEST_URI" \
-            .
+            apps/api-gateway
 
           echo "Pushing image to Google Artifact Registry..."
           docker push "$IMAGE_URI"
