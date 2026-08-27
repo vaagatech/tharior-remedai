@@ -80,8 +80,12 @@ spec:
           envFrom:
             - configMapRef:
                 name: remedai-config
-          {{- if .Values.bff.env }}
           env:
+            - name: PYTHONPATH
+              value: "/app"
+            - name: PORT
+              value: {{ .Values.bff.port | default 8000 | quote }}
+          {{- if .Values.bff.env }}
             {{- toYaml .Values.bff.env | nindent 12 }}
           {{- end }}
           {{- if .Values.bff.probes }}
