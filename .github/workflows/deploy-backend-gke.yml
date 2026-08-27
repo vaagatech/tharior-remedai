@@ -7,6 +7,7 @@ on:
       - 'apps/api-gateway/**'
       - 'packages/**'
       - 'app-config.yaml'
+      - 'deploy/**'
       - '.github/workflows/deploy-backend-gke.yml'
   workflow_dispatch:
     inputs:
