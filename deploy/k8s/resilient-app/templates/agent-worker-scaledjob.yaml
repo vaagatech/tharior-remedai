@@ -1,0 +1,85 @@
+{{- if and .Values.agentWorker.enabled (eq .Values.agentWorker.mode "ScaledJob") }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: {{ .Values.agentWorker.name | default "remedai-agent-worker" | quote }}
+  namespace: {{ .Values.global.namespace | default "remedai" | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.agentWorker.name | default "remedai-agent-worker" | quote }}
+    app.kubernetes.io/component: agent-worker
+    app.kubernetes.io/part-of: remedai-platform
+spec:
+  jobTargetRef:
+    parallelism: 1
+    completions: 1
+    activeDeadlineSeconds: 1800 # 30 mins max execution time per task
+    backoffLimit: 2
+    template:
+      metadata:
+        labels:
+          app: {{ .Values.agentWorker.name | default "remedai-agent-worker" | quote }}
+          app.kubernetes.io/name: {{ .Values.agentWorker.name | default "remedai-agent-worker" | quote }}
+          app.kubernetes.io/component: agent-worker
+      spec:
+        restartPolicy: Never
+        terminationGracePeriodSeconds: {{ .Values.global.spotResilience.terminationGracePeriodSeconds | default 25 }}
+
+        {{- if .Values.serviceAccount.create }}
+        serviceAccountName: {{ .Values.serviceAccount.name | default "remedai-sa" | quote }}
+        {{- end }}
+
+        {{- if .Values.global.spotResilience.preferSpotNodes }}
+        tolerations:
+          - key: "cloud.google.com/gke-spot"
+            operator: "Equal"
+            value: "true"
+            effect: "NoSchedule"
+
+        affinity:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                preference:
+                  matchExpressions:
+                    - key: cloud.google.com/gke-spot
+                      operator: In
+                      values:
+                        - "true"
+        {{- end }}
+
+        containers:
+          - name: agent-worker
+            image: {{ .Values.global.image | quote }}
+            imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" | quote }}
+            command: ["python", "-c", "import asyncio, logging; from app.core.keda_operator import keda_operator; logging.basicConfig(level=logging.INFO); logging.info('Starting Remedai Isolated Agent Worker...'); asyncio.run(asyncio.sleep(1))"]
+            resources:
+              requests:
+                cpu: {{ .Values.agentWorker.resources.requests.cpu | default "250m" | quote }}
+                memory: {{ .Values.agentWorker.resources.requests.memory | default "256Mi" | quote }}
+              limits:
+                cpu: {{ .Values.agentWorker.resources.limits.cpu | default "1000m" | quote }}
+                memory: {{ .Values.agentWorker.resources.limits.memory | default "512Mi" | quote }}
+            envFrom:
+              - configMapRef:
+                  name: remedai-config
+            {{- if .Values.agentWorker.env }}
+            env:
+              {{- toYaml .Values.agentWorker.env | nindent 14 }}
+            {{- end }}
+            volumeMounts:
+              - name: sandbox-ephemeral-storage
+                mountPath: /tmp/sandboxes
+        volumes:
+          - name: sandbox-ephemeral-storage
+            emptyDir:
+              medium: ""
+              sizeLimit: {{ .Values.agentWorker.sessionIsolation.ephemeralStorageLimit | default "2Gi" | quote }}
+  pollingInterval: {{ .Values.agentWorker.keda.pollingInterval | default 5 }}
+  successfulJobsHistoryLimit: {{ .Values.agentWorker.keda.successfulJobsHistoryLimit | default 5 }}
+  failedJobsHistoryLimit: {{ .Values.agentWorker.keda.failedJobsHistoryLimit | default 5 }}
+  maxReplicaCount: {{ .Values.agentWorker.keda.maxReplicaCount | default 50 }}
+  {{- if .Values.agentWorker.keda.triggers }}
+  triggers:
+    {{- toYaml .Values.agentWorker.keda.triggers | nindent 4 }}
+  {{- end }}
+{{- end }}

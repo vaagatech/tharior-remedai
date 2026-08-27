@@ -77,23 +77,64 @@
         for dynamic pod scaling and Git branch lifecycle management.
       </p>
 
-      <h2>1. KEDA Autoscaling Operator (`keda_operator.py`)</h2>
+      <h2>1. KEDA Multi-Component Autoscaling Architecture</h2>
       <p>
-        The KEDA Operator dynamically balances workloads across two tiers:
+        <strong>Tharior Remedai</strong> decouples into three specialized operational roles with custom KEDA autoscaling profiles:
       </p>
       <ul>
         <li>
-          <strong>Shared Deployment Autoscaling (KEDA ScaledObject)</strong>: 
-          Monitors queue backlog (Redis/Anvesh) and Prometheus active task counts to scale worker pods from 2 to 40 replicas.
+          <strong>BFF / Gateway (<code>remedai-bff</code>)</strong>: 
+          Runs <strong>1 minimal replica when idle</strong> to maintain instant responsiveness for webhooks, UI desk, and healthchecks. 
+          Scales dynamically up to <strong>10 replicas</strong> via KEDA ScaledObject when CPU exceeds 70% or Memory exceeds 75%.
         </li>
         <li>
-          <strong>Dynamic Ephemeral Pod Provisioning (KEDA ScaledJob)</strong>:
-          When a high-tier task (Tiers 8–10) or mission-critical security task is dispatched, the operator provisions a dedicated, 
-          single-tenant isolated pod with POSIX 0700 scratchpads and auto-terminates upon completion.
+          <strong>Scheduler (<code>remedai-scheduler</code>)</strong>: 
+          Runs <strong>1 minimal replica when idle</strong> for background timers. 
+          Scales up to <strong>5 replicas</strong> via KEDA Cron / task queues during weekly OpenRouter catalog syncs and batch repository maintenance sweeps.
+        </li>
+        <li>
+          <strong>Agentic Worker (<code>remedai-agent-worker</code>)</strong>: 
+          Operates in <strong>Scale-to-Zero mode (0 replicas when idle)</strong>! 
+          When remediation tasks, PR reviews, or AST synthesis requests arrive, KEDA provisions isolated ephemeral worker pods scaling from <strong>0 to 50 jobs</strong> dynamically.
         </li>
       </ul>
 
-      <h2>2. Git Branching Lifecycle Operator (`branch_operator.py`)</h2>
+      <h2>2. Multi-Tenant Session Isolation & Memory Fences</h2>
+      <p>
+        Strict sandboxing ensures zero cross-session context overlap, memory leaks, or file disclosure:
+      </p>
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-title">POSIX 0700 Sandbox Fences</div>
+          <p class="card-desc">
+            Each tenant session is allocated an isolated directory in <code>/tmp/sandboxes/{tenant}_{user}_{session}</code> 
+            with POSIX <code>0700</code> permission masks, strictly prohibiting unauthorized read/write access.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">Zero-Disk-Leak Ephemeral Volumes</div>
+          <p class="card-desc">
+            Ephemeral Kubernetes <code>emptyDir</code> scratchpads with automated lifecycle sweeps ensure all temporary files, 
+            AST traces, and git artifacts are completely wiped upon task completion.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">75% Memory & CPU Fences</div>
+          <p class="card-desc">
+            Pod resource managers enforce a strict 75% memory and CPU threshold, preserving 25% operational headroom 
+            for Python generational garbage collection and adaptive chunk size reduction.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">K8s NetworkPolicy Boundaries</div>
+          <p class="card-desc">
+            Workload NetworkPolicies restrict worker pod egress strictly to external LLM providers and VCS endpoints, 
+            blocking lateral pod-to-pod network traffic.
+          </p>
+        </div>
+      </div>
+
+      <h2>3. Git Branching Lifecycle Operator (`branch_operator.py`)</h2>
       <p>
         The Branch Operator enforces clean Git practices across all remediation pipelines:
       </p>
@@ -119,14 +160,16 @@
         </div>
       </div>
 
-      <h2>3. Kubernetes Custom Resource Definitions (CRD)</h2>
+      <h2>4. Kubernetes Deployment Blueprints & Helm Chart</h2>
       <p>
-        Manifests located in <code>deploy/k8s/</code>:
+        Manifests located in <code>deploy/k8s/</code> and <code>deploy/k8s/resilient-app/</code>:
       </p>
       <ul>
+        <li><code>app-config.yaml</code>: Top-level unified config blueprint for BFF, Scheduler, and Agent Workers.</li>
+        <li><code>deploy/k8s/resilient-app/</code>: Complete production Helm chart supporting GKE Spot VMs and KEDA.</li>
+        <li><code>deploy/k8s/keda-scaledobject.yaml</code>: ScaledObjects for BFF (min 1) and Scheduler (min 1).</li>
+        <li><code>deploy/k8s/keda-scaledjob.yaml</code>: ScaledJob for Agent Workers with Scale-to-Zero (min 0).</li>
         <li><code>deploy/k8s/crd-remediation-branch.yaml</code>: CRD for <code>RemediationBranch</code> resource.</li>
-        <li><code>deploy/k8s/keda-scaledobject.yaml</code>: ScaledObject definition for deployment scaling.</li>
-        <li><code>deploy/k8s/keda-scaledjob.yaml</code>: ScaledJob definition for single-tenant ephemeral pods.</li>
         <li><code>deploy/k8s/keda-operator-deployment.yaml</code>: Complete KEDA v2.14 operator and metrics server deployment.</li>
       </ul>
     </main>

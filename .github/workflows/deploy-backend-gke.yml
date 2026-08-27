@@ -1,0 +1,112 @@
+name: Deploy Backend to GKE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api-gateway/**'
+      - 'packages/**'
+      - 'app-config.yaml'
+      - '.github/workflows/deploy-backend-gke.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  build-and-deploy:
+    name: Build Container & Deploy to GKE
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: gcp_auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Dynamically extract GCP Project ID, Region, and GKE Cluster Name
+      - name: Resolve GCP & GKE Dynamic Parameters
+        id: resolve_gcp
+        run: |
+          PROJECT_ID="${{ steps.gcp_auth.outputs.project_id }}"
+          if [ -z "$PROJECT_ID" ]; then
+            PROJECT_ID="$(gcloud config get-value project)"
+          fi
+
+          REGION="${{ secrets.GCP_REGION || 'us-central1' }}"
+          CLUSTER_NAME="${{ secrets.GKE_CLUSTER_NAME || 'dev-spot-gke' }}"
+          REGISTRY_REPO="${{ secrets.ARTIFACT_REGISTRY_REPO || 'remedai-docker' }}"
+
+          echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
+          echo "REGION=$REGION" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+          echo "REGISTRY_REPO=$REGISTRY_REPO" >> $GITHUB_ENV
+
+          echo "Deploying with dynamically resolved parameters:"
+          echo " - Project ID: $PROJECT_ID"
+          echo " - Region:     $REGION"
+          echo " - GKE Cluster:$CLUSTER_NAME"
+          echo " - Registry:   $REGISTRY_REPO"
+
+      - name: Configure Docker for Google Artifact Registry
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+
+      - name: Build and Push Docker Image
+        env:
+          IMAGE_NAME: remedai-api
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/$REGISTRY_REPO"
+          echo "Building Docker container for FastAPI backend..."
+          docker build -t "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" -t "$REGISTRY/$IMAGE_NAME:latest" apps/api-gateway
+          docker push "$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
+          docker push "$REGISTRY/$IMAGE_NAME:latest"
+
+          echo "IMAGE_URI=$REGISTRY/$IMAGE_NAME:$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Get GKE Cluster Credentials
+        run: |
+          gcloud container clusters get-credentials "$CLUSTER_NAME" \
+            --region "$REGION" \
+            --project "$PROJECT_ID"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Deploy to GKE via Resilient Helm Template
+        run: |
+          if [ -d "deploy/k8s/resilient-app" ]; then
+            CHART_PATH="deploy/k8s/resilient-app"
+          else
+            git clone --depth 1 https://github.com/${{ github.repository_owner }}/gke-deployment.git /tmp/gke-infra
+            CHART_PATH="/tmp/gke-infra/templates/resilient-app"
+          fi
+
+          echo "Deploying remedai-api with Spot resilience and KEDA autoscaling..."
+          helm upgrade --install remedai-api "$CHART_PATH" \
+            -f app-config.yaml \
+            --namespace remedai \
+            --create-namespace \
+            --set global.image="$IMAGE_URI" \
+            --set app.image="$IMAGE_URI" \
+            --wait --timeout 5m

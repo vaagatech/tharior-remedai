@@ -1,0 +1,15 @@
+{{- if .Values.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-pdb" (.Values.bff.name | default "remedai-bff") | quote }}
+  namespace: {{ .Values.global.namespace | default "remedai" | quote }}
+  labels:
+    app.kubernetes.io/name: remedai-bff-pdb
+    app.kubernetes.io/part-of: remedai-platform
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ .Values.bff.name | default "remedai-bff" | quote }}
+{{- end }}

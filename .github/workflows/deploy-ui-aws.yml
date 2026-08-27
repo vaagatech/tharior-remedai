@@ -1,0 +1,119 @@
+name: Deploy UI to AWS (S3 + CloudFront)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web-desk/**'
+      - 'deploy/terraform-aws/**'
+      - '.github/workflows/deploy-ui-aws.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      api_base_url:
+        description: 'Override API Base URL (optional - defaults to GCP API Gateway output)'
+        required: false
+        default: ''
+
+jobs:
+  provision-and-deploy-ui:
+    name: Provision AWS Infra & Deploy Web Desk
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.8.0'
+
+      # Step 1: Provision / Refresh AWS Cognito, S3 & CloudFront Infrastructure
+      - name: Provision AWS S3, CloudFront & Cognito via Terraform
+        id: tf_aws
+        run: |
+          cd deploy/terraform-aws
+          terraform init
+          terraform apply -auto-approve -var="environment=${{ github.event.inputs.environment || 'dev' }}"
+
+          # Export outputs dynamically for downstream build steps
+          echo "COGNITO_USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)" >> $GITHUB_ENV
+          echo "COGNITO_CLIENT_ID=$(terraform output -raw cognito_client_id)" >> $GITHUB_ENV
+          echo "AWS_S3_BUCKET_NAME=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          echo "CLOUDFRONT_DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
+          echo "CLOUDFRONT_URL=$(terraform output -raw cloudfront_domain_name)" >> $GITHUB_ENV
+
+      # Step 2: Resolve GCP API Gateway Endpoint
+      - name: Resolve GCP API Gateway URL
+        id: resolve_api
+        run: |
+          if [ -n "${{ github.event.inputs.api_base_url }}" ]; then
+            API_URL="${{ github.event.inputs.api_base_url }}"
+          elif [ -n "${{ secrets.VITE_API_BASE_URL }}" ]; then
+            API_URL="${{ secrets.VITE_API_BASE_URL }}"
+          else
+            # Default to regional API Gateway domain pattern or path
+            API_URL="https://dev-api-gw.gateway.dev"
+          fi
+          echo "VITE_API_BASE_URL=$API_URL" >> $GITHUB_ENV
+
+      # Step 3: Build React Web Desk with Dynamically Injected Auth Config
+      - name: Install Dependencies & Build Web Desk
+        run: |
+          npm ci
+          echo "Building Web Desk with dynamic deployment parameters:"
+          echo " - Cognito User Pool: $COGNITO_USER_POOL_ID"
+          echo " - Cognito Client ID: $COGNITO_CLIENT_ID"
+          echo " - Target S3 Bucket:  $AWS_S3_BUCKET_NAME"
+          echo " - API Base URL:      $VITE_API_BASE_URL"
+
+          export VITE_AWS_REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          export VITE_COGNITO_USER_POOL_ID="$COGNITO_USER_POOL_ID"
+          export VITE_COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID"
+          export VITE_API_BASE_URL="$VITE_API_BASE_URL"
+
+          npm run build --workspace=apps/web-desk
+
+      # Step 4: Sync Built Assets to S3
+      - name: Sync Static Assets to AWS S3
+        run: |
+          echo "Syncing built assets to s3://$AWS_S3_BUCKET_NAME..."
+          aws s3 sync apps/web-desk/dist/ "s3://$AWS_S3_BUCKET_NAME" \
+            --delete \
+            --cache-control "max-age=31536000,public" \
+            --exclude "index.html"
+
+          # Sync index.html with no-cache so SPA routing updates immediately
+          aws s3 cp apps/web-desk/dist/index.html "s3://$AWS_S3_BUCKET_NAME/index.html" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      # Step 5: Invalidate CloudFront CDN Cache
+      - name: Invalidate AWS CloudFront Cache
+        run: |
+          echo "Invalidating CloudFront cache ($CLOUDFRONT_DISTRIBUTION_ID)..."
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*"
+
+          echo "Deployment Complete! Web Desk live at: $CLOUDFRONT_URL"

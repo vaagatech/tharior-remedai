@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: remedai-config
+  namespace: {{ .Values.global.namespace | default "remedai" | quote }}
+  labels:
+    app.kubernetes.io/part-of: remedai-platform
+data:
+  APP_ENV: {{ .Values.global.environment | default "production" | quote }}
+  MAX_MEMORY_MB: "300"
+  GC_RESERVE_RATIO: "0.25"
+  BASE_SANDBOX_DIR: {{ .Values.agentWorker.sessionIsolation.baseSandboxDir | default "/tmp/sandboxes" | quote }}
+  POSIX_PERMISSIONS_MASK: {{ .Values.agentWorker.sessionIsolation.posixPermissionsMask | default "0700" | quote }}
+  OPENROUTER_DEFAULT_URL: "https://openrouter.ai/api/v1/models"
+  REFRESH_INTERVAL_SECONDS: "604800" # 7 days / weekly

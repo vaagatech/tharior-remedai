@@ -1,0 +1,106 @@
+{{- if .Values.bff.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.bff.name | default "remedai-bff" | quote }}
+  namespace: {{ .Values.global.namespace | default "remedai" | quote }}
+  labels:
+    app: {{ .Values.bff.name | default "remedai-bff" | quote }}
+    app.kubernetes.io/name: {{ .Values.bff.name | default "remedai-bff" | quote }}
+    app.kubernetes.io/component: bff-gateway
+    app.kubernetes.io/part-of: remedai-platform
+spec:
+  replicas: {{ .Values.bff.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ .Values.bff.name | default "remedai-bff" | quote }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.bff.name | default "remedai-bff" | quote }}
+        app.kubernetes.io/name: {{ .Values.bff.name | default "remedai-bff" | quote }}
+        app.kubernetes.io/component: bff-gateway
+        app.kubernetes.io/part-of: remedai-platform
+    spec:
+      # Spot VM Resilience: Graceful shutdown period during 30s Spot preemption notice
+      terminationGracePeriodSeconds: {{ .Values.global.spotResilience.terminationGracePeriodSeconds | default 25 }}
+
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default "remedai-sa" | quote }}
+      {{- end }}
+
+      {{- if .Values.global.spotResilience.preferSpotNodes }}
+      # Tolerations for GKE Spot VM taint
+      tolerations:
+        - key: "cloud.google.com/gke-spot"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+
+      # Prefer scheduling on Spot nodes; fallback to on-demand if spot capacity exhausted
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: cloud.google.com/gke-spot
+                    operator: In
+                    values:
+                      - "true"
+
+        # Multi-Zone Anti-Affinity: Spread pods evenly across availability zones
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - {{ .Values.bff.name | default "remedai-bff" | quote }}
+                topologyKey: "topology.kubernetes.io/zone"
+      {{- end }}
+
+      containers:
+        - name: bff-gateway
+          image: {{ .Values.global.image | quote }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" | quote }}
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.bff.port | default 8000 }}
+          resources:
+            requests:
+              cpu: {{ .Values.bff.resources.requests.cpu | default "250m" | quote }}
+              memory: {{ .Values.bff.resources.requests.memory | default "256Mi" | quote }}
+            limits:
+              cpu: {{ .Values.bff.resources.limits.cpu | default "1000m" | quote }}
+              memory: {{ .Values.bff.resources.limits.memory | default "512Mi" | quote }}
+          envFrom:
+            - configMapRef:
+                name: remedai-config
+          {{- if .Values.bff.env }}
+          env:
+            {{- toYaml .Values.bff.env | nindent 12 }}
+          {{- end }}
+          {{- if .Values.bff.probes }}
+          {{- if .Values.bff.probes.liveness }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.bff.probes.liveness.path | default "/healthz" | quote }}
+              port: {{ .Values.bff.port | default 8000 }}
+            initialDelaySeconds: {{ .Values.bff.probes.liveness.initialDelaySeconds | default 10 }}
+            periodSeconds: {{ .Values.bff.probes.liveness.periodSeconds | default 15 }}
+          {{- end }}
+          {{- if .Values.bff.probes.readiness }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.bff.probes.readiness.path | default "/healthz" | quote }}
+              port: {{ .Values.bff.port | default 8000 }}
+            initialDelaySeconds: {{ .Values.bff.probes.readiness.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .Values.bff.probes.readiness.periodSeconds | default 10 }}
+          {{- end }}
+          {{- end }}
+{{- end }}

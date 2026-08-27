@@ -1,0 +1,50 @@
+{{- if and .Values.networkPolicy.enabled .Values.networkPolicy.isolateSessions }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: remedai-session-isolation-policy
+  namespace: {{ .Values.global.namespace | default "remedai" | quote }}
+  labels:
+    app.kubernetes.io/name: remedai-session-isolation
+    app.kubernetes.io/part-of: remedai-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: agent-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: bff-gateway
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow outbound calls to external LLM providers (OpenRouter, OpenAI, Anthropic) and VCS (GitHub, GitLab)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+{{- end }}

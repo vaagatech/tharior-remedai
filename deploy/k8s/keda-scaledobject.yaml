@@ -1,30 +1,59 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: autonomous-agent-engine-keda
-  namespace: agent-platform
+  name: remedai-bff-scaler
+  namespace: remedai
   labels:
-    app.kubernetes.io/name: autonomous-agent-engine
+    app.kubernetes.io/name: remedai-bff
+    app.kubernetes.io/component: bff-scaler
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: autonomous-agent-engine
-  minReplicaCount: 2
-  maxReplicaCount: 40
-  cooldownPeriod: 300
+    name: remedai-bff
+  minReplicaCount: 1 # Scale down to 1 when idle
+  maxReplicaCount: 10
+  cooldownPeriod: 180
   pollingInterval: 15
   triggers:
-    # Trigger 1: Inbound Webhook Remediations Queue (Redis / Anvesh Stream)
-    - type: redis
+    - type: cpu
+      metricType: Utilization
       metadata:
-        address: redis-queue.agent-platform.svc.cluster.local:6379
-        listName: incoming_tickets_queue
-        listLength: "5"
-    # Trigger 2: Active Clarification Sessions / High Workload Prometheus Metric
-    - type: prometheus
+        value: "70"
+    - type: memory
+      metricType: Utilization
       metadata:
-        serverAddress: http://prometheus-k8s.monitoring.svc.cluster.local:9090
-        metricName: agent_engine_active_tasks_count
-        query: sum(agent_engine_active_tasks_count{namespace="agent-platform"})
-        threshold: "10"
+        value: "75"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: remedai-scheduler-scaler
+  namespace: remedai
+  labels:
+    app.kubernetes.io/name: remedai-scheduler
+    app.kubernetes.io/component: scheduler-scaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: remedai-scheduler
+  minReplicaCount: 1 # Scale down to 1 when idle
+  maxReplicaCount: 5
+  cooldownPeriod: 300
+  pollingInterval: 30
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "75"
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: "75"
+    - type: cron
+      metadata:
+        timezone: "UTC"
+        start: "0 0 * * 0" # Weekly on Sunday 00:00 UTC
+        end: "0 2 * * 0"
+        desiredReplicas: "2"

@@ -1,0 +1,21 @@
+{{- if .Values.bff.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.bff.name | default "remedai-bff" | quote }}
+  namespace: {{ .Values.global.namespace | default "remedai" | quote }}
+  labels:
+    app: {{ .Values.bff.name | default "remedai-bff" | quote }}
+    app.kubernetes.io/name: {{ .Values.bff.name | default "remedai-bff" | quote }}
+    app.kubernetes.io/component: bff-gateway
+    app.kubernetes.io/part-of: remedai-platform
+spec:
+  type: {{ .Values.bff.serviceType | default "ClusterIP" | quote }}
+  ports:
+    - name: http
+      port: {{ .Values.bff.servicePort | default 80 }}
+      targetPort: {{ .Values.bff.port | default 8000 }}
+      protocol: TCP
+  selector:
+    app: {{ .Values.bff.name | default "remedai-bff" | quote }}
+{{- end }}

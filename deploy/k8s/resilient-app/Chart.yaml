@@ -1,0 +1,12 @@
+apiVersion: v2
+name: remedai-platform
+description: Enterprise Helm chart for Tharior Remedai Agentic Platform on GKE Multi-Zone Spot VMs with KEDA Autoscaling, BFF, Scheduler, and Session-Isolated Agent Workers
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - autonomous-agent
+  - gke-spot
+  - keda-autoscaling
+  - session-isolation
+  - bff-gateway

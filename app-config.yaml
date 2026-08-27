@@ -1,0 +1,211 @@
+# ==============================================================================
+# Autonomous Coding Engineer (Remedai) - GKE App Config Blueprint
+# ==============================================================================
+
+global:
+  namespace: remedai
+  image: "remedai-api:latest"
+  imagePullPolicy: IfNotPresent
+  environment: "production"
+  spotResilience:
+    enabled: true
+    terminationGracePeriodSeconds: 25
+    preferSpotNodes: true
+
+# Kubernetes Service Account
+serviceAccount:
+  create: true
+  name: "remedai-sa"
+  annotations: {}
+
+# Optional Google Cloud Storage (GCS) Workload Identity Integration
+gcs:
+  enabled: false
+  bucketName: ""
+  gcpServiceAccount: ""
+
+# ------------------------------------------------------------------------------
+# 1. Backend-for-Frontend (BFF) / API Gateway
+# Minimum 1 replica when idle; scales up on CPU/Memory/Traffic via KEDA
+# ------------------------------------------------------------------------------
+bff:
+  enabled: true
+  name: remedai-bff
+  replicas: 1
+  port: 8000
+  servicePort: 80
+  serviceType: ClusterIP
+
+  # KEDA Event-Driven Autoscaling for BFF
+  keda:
+    enabled: true
+    minReplicaCount: 1 # Scale down to 1 when idle
+    maxReplicaCount: 10
+    pollingInterval: 15
+    cooldownPeriod: 180
+    triggers:
+      - type: cpu
+        metricType: Utilization
+        metadata:
+          value: "70"
+      - type: memory
+        metricType: Utilization
+        metadata:
+          value: "75"
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  probes:
+    liveness:
+      path: /healthz
+      initialDelaySeconds: 10
+      periodSeconds: 15
+    readiness:
+      path: /healthz
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+  env:
+    - name: SERVICE_ROLE
+      value: "bff_gateway"
+    - name: PORT
+      value: "8000"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: MAX_MEMORY_MB
+      value: "300"
+    - name: GC_RESERVE_RATIO
+      value: "0.25"
+    - name: COGNITO_SIMULATION_MODE
+      value: "false"
+
+# ------------------------------------------------------------------------------
+# 2. Scheduler Service (Weekly Model Pricing Sync, Maintenance, Cache Sweeps)
+# Minimum 1 replica when idle; scales up on cron schedule or batch tasks
+# ------------------------------------------------------------------------------
+scheduler:
+  enabled: true
+  name: remedai-scheduler
+  replicas: 1
+
+  # KEDA Autoscaling for Scheduler
+  keda:
+    enabled: true
+    minReplicaCount: 1 # Scale down to 1 when idle
+    maxReplicaCount: 5
+    pollingInterval: 30
+    cooldownPeriod: 300
+    triggers:
+      - type: cpu
+        metricType: Utilization
+        metadata:
+          value: "75"
+      - type: memory
+        metricType: Utilization
+        metadata:
+          value: "75"
+      - type: cron
+        metadata:
+          timezone: "UTC"
+          start: "0 0 * * 0" # Weekly on Sunday 00:00 UTC
+          end: "0 2 * * 0"
+          desiredReplicas: "2"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  env:
+    - name: SERVICE_ROLE
+      value: "scheduler"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: MAX_MEMORY_MB
+      value: "200"
+    - name: GC_RESERVE_RATIO
+      value: "0.25"
+
+# ------------------------------------------------------------------------------
+# 3. Agentic Worker Service & Session-Isolated Execution Engine
+# SCALE-TO-ZERO: 0 pods when idle; scales up dynamically on task demand
+# ------------------------------------------------------------------------------
+agentWorker:
+  enabled: true
+  name: remedai-agent-worker
+  mode: ScaledJob
+
+  # KEDA Event-Driven Scale-to-Zero & Scale-Up
+  keda:
+    enabled: true
+    minReplicaCount: 0 # Scales to ZERO when no tasks are queued
+    maxReplicaCount: 50 # Elastic scale-up for heavy agentic remediation
+    pollingInterval: 5
+    cooldownPeriod: 60
+    successfulJobsHistoryLimit: 5
+    failedJobsHistoryLimit: 5
+    triggers:
+      - type: redis
+        metadata:
+          address: "redis-queue.remedai.svc.cluster.local:6379"
+          listName: "remedai_agentic_tasks"
+          listLength: "1"
+
+  # Multi-Tenant Session Isolation & Memory Fences
+  sessionIsolation:
+    enabled: true
+    baseSandboxDir: "/tmp/sandboxes"
+    posixPermissionsMask: "0700"
+    ephemeralStorageLimit: "2Gi"
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+  env:
+    - name: SERVICE_ROLE
+      value: "agent_worker"
+    - name: IS_ISOLATED_POD
+      value: "true"
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: MAX_MEMORY_MB
+      value: "300"
+    - name: GC_RESERVE_RATIO
+      value: "0.25"
+    - name: BASE_SANDBOX_DIR
+      value: "/tmp/sandboxes"
+
+# ------------------------------------------------------------------------------
+# 4. Ingress, Pod Disruption Budget & Network Policy
+# ------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "gce"
+  staticIpName: "gke-ingress-ip"
+  path: /
+  pathType: Prefix
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.allow-http: "true"
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  isolateSessions: true

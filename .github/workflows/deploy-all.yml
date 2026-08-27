@@ -1,0 +1,25 @@
+name: Deploy All (GKE Backend + AWS UI)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment (dev / prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend to GKE
+    uses: ./.github/workflows/deploy-backend-gke.yml
+    secrets: inherit
+
+  deploy-ui:
+    name: Deploy UI to AWS (S3 + CloudFront)
+    needs: [deploy-backend]
+    uses: ./.github/workflows/deploy-ui-aws.yml
+    secrets: inherit
