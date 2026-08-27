@@ -185,9 +185,8 @@ jobs:
           echo "Current deployment and autoscaling status:"
           kubectl get pods,svc,scaledobject,scaledjob -n remedai
 
-      # Optional step to update central S3 deployment manifest if AWS credentials exist
+      # Optional step to update central S3 deployment manifest
       - name: Update Central S3 Deployment Manifest
-        if: ${{ env.AWS_ACCESS_KEY_ID != '' || secrets.AWS_ACCESS_KEY_ID != '' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -217,4 +216,6 @@ jobs:
                 '.GCP_API_GATEWAY_URL = $ep | .BACKEND_DEPLOYED_TIMESTAMP = $ts' /tmp/manifest.json > /tmp/manifest_updated.json
               aws s3 cp /tmp/manifest_updated.json "s3://${STATE_BUCKET}/config/${ENV_NAME}/manifest.json"
             fi
+          else
+            echo "AWS credentials not provided in GKE runner; skipping S3 manifest sync."
           fi
