@@ -8,6 +8,7 @@ multimodal grouping (Audio, Video, Image), and persists active matrices in Anves
 
 import os
 import time
+import asyncio
 import httpx
 import logging
 from typing import Dict, Any, List, Optional
@@ -761,6 +762,22 @@ class LLMPricingService:
         if spec.representative_models:
             return spec.representative_models[0]
         return "openai/gpt-4o"
+
+    async def start_weekly_scheduler_loop(self):
+        """Continuous periodic loop that refreshes OpenRouter pricing on schedule."""
+        logger.info("Starting OpenRouter LLM Pricing weekly scheduler loop...")
+        while True:
+            try:
+                logger.info("Executing scheduled LLM pricing catalog refresh...")
+                result = await self.fetch_and_update_pricing(force=True)
+                logger.info(f"LLM pricing catalog refreshed successfully: {result.get('models_ingested', 0)} models ingested.")
+            except Exception as e:
+                logger.error(f"Error refreshing LLM pricing in scheduler: {e}", exc_info=True)
+
+            # Sleep for configured cache TTL or weekly interval (default 7 days)
+            sleep_duration = max(self.cache_ttl_seconds, 60)
+            logger.info(f"Scheduler sleeping for {sleep_duration} seconds until next refresh cycle.")
+            await asyncio.sleep(sleep_duration)
 
 
 # Global Pricing & Tiering Singleton
