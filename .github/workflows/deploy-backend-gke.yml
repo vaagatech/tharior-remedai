@@ -51,8 +51,33 @@ jobs:
           fi
 
           REGION="${{ secrets.GCP_REGION || 'us-central1' }}"
-          CLUSTER_NAME="${{ secrets.GKE_CLUSTER_NAME || 'dev-spot-gke' }}"
-          REGISTRY_REPO="${{ secrets.ARTIFACT_REGISTRY_REPO || 'remedai-docker' }}"
+          CLUSTER_NAME="${{ secrets.GKE_CLUSTER_NAME || 'dev-spot-cluster' }}"
+          REGISTRY_REPO="${{ secrets.ARTIFACT_REGISTRY_REPO || 'dev-gke-apps' }}"
+
+          # Auto-detect or ensure Artifact Registry repo exists
+          if ! gcloud artifacts repositories describe "$REGISTRY_REPO" --location="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+            EXISTING_REPO=$(gcloud artifacts repositories list --location="$REGION" --project="$PROJECT_ID" --format="value(name)" 2>/dev/null | head -n 1 | awk -F'/' '{print $NF}')
+            if [ -n "$EXISTING_REPO" ]; then
+              echo "Detected existing Artifact Registry repository: $EXISTING_REPO"
+              REGISTRY_REPO="$EXISTING_REPO"
+            else
+              echo "Creating Artifact Registry repository: $REGISTRY_REPO"
+              gcloud artifacts repositories create "$REGISTRY_REPO" \
+                --repository-format=docker \
+                --location="$REGION" \
+                --project="$PROJECT_ID" \
+                --description="Docker repository for Remedai agent engine" --quiet || true
+            fi
+          fi
+
+          # Auto-detect GKE Cluster name if default not matched
+          if ! gcloud container clusters describe "$CLUSTER_NAME" --region="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+            EXISTING_CLUSTER=$(gcloud container clusters list --project="$PROJECT_ID" --format="value(name)" 2>/dev/null | head -n 1)
+            if [ -n "$EXISTING_CLUSTER" ]; then
+              echo "Detected existing GKE Cluster: $EXISTING_CLUSTER"
+              CLUSTER_NAME="$EXISTING_CLUSTER"
+            fi
+          fi
 
           echo "PROJECT_ID=$PROJECT_ID" >> $GITHUB_ENV
           echo "REGION=$REGION" >> $GITHUB_ENV

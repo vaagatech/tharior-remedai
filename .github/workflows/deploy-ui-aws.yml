@@ -84,7 +84,8 @@ jobs:
       # Step 3: Build React Web Desk with Dynamically Injected Auth Config
       - name: Install Dependencies & Build Web Desk
         run: |
-          npm ci || npm install
+          cd apps/web-desk
+          npm install
           echo "Building Web Desk with dynamic deployment parameters:"
           echo " - Cognito User Pool: $COGNITO_USER_POOL_ID"
           echo " - Cognito Client ID: $COGNITO_CLIENT_ID"
@@ -96,7 +97,8 @@ jobs:
           export VITE_COGNITO_CLIENT_ID="$COGNITO_CLIENT_ID"
           export VITE_API_BASE_URL="$VITE_API_BASE_URL"
 
-          npm run build --workspace=apps/web-desk
+          npm run build
+          cd ../..
 
       # Step 4: Sync Built Assets to S3
       - name: Sync Static Assets to AWS S3
