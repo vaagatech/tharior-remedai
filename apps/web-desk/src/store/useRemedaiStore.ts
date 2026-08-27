@@ -561,6 +561,8 @@ export const INITIAL_ONBOARDED_REPOS: OnboardedRepo[] = [
     provider: 'github',
     url: 'https://github.com/vaagatech/tharior-remedai',
     default_branch: 'main',
+    selected_branches: ['main', 'develop'],
+    available_branches: ['main', 'develop', 'staging', 'feature/ast-graph', 'release/v2.0'],
     status: 'INDEXED',
     last_indexed_at: '2026-08-27T17:20:00Z',
     stats: {
@@ -573,6 +575,7 @@ export const INITIAL_ONBOARDED_REPOS: OnboardedRepo[] = [
     },
     auth_type: 'pat',
     selected: true,
+    is_checked: true,
   },
   {
     id: 'repo-vaagatech-gke-infra',
@@ -581,6 +584,8 @@ export const INITIAL_ONBOARDED_REPOS: OnboardedRepo[] = [
     provider: 'github',
     url: 'https://github.com/vaagatech/gke-deployment',
     default_branch: 'main',
+    selected_branches: ['main'],
+    available_branches: ['main', 'production', 'infra-modules'],
     status: 'INDEXED',
     last_indexed_at: '2026-08-27T17:25:00Z',
     stats: {
@@ -593,6 +598,7 @@ export const INITIAL_ONBOARDED_REPOS: OnboardedRepo[] = [
     },
     auth_type: 'pat',
     selected: false,
+    is_checked: true,
   },
 ];
 
@@ -870,6 +876,11 @@ interface RemedaiStore {
   onboardRepo: (repo: Omit<OnboardedRepo, 'id' | 'status' | 'stats'>) => void;
   selectRepo: (id: string) => void;
   startIndexingRepo: (id: string) => void;
+  toggleRepoChecked: (id: string) => void;
+  selectAllRepos: (selected: boolean) => void;
+  addRepoBranch: (repoId: string, branch: string) => void;
+  removeRepoBranch: (repoId: string, branch: string) => void;
+  batchIndexRepos: (repoIds?: string[]) => void;
 
   // Knowledge Graph
   knowledgeGraph: KnowledgeGraphData;
@@ -913,9 +924,18 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
   activeRepo: INITIAL_ONBOARDED_REPOS[0],
 
   onboardRepo: (repoData) => {
+    // Default to repo default branch and 'main' if not specified
+    const defaultBranch = repoData.default_branch || 'main';
+    const initialBranches = Array.from(
+      new Set(repoData.selected_branches?.length ? repoData.selected_branches : [defaultBranch, 'main'])
+    );
+
     const newRepo: OnboardedRepo = {
       ...repoData,
       id: `repo-${Date.now()}`,
+      default_branch: defaultBranch,
+      selected_branches: initialBranches,
+      available_branches: Array.from(new Set([defaultBranch, 'main', 'develop', 'staging'])),
       status: 'NOT_INDEXED',
       stats: {
         files_count: 0,
@@ -926,6 +946,7 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
         languages: {},
       },
       selected: true,
+      is_checked: true,
     };
     set((state) => ({
       onboardedRepos: [newRepo, ...state.onboardedRepos.map((r) => ({ ...r, selected: false }))],
@@ -944,7 +965,104 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
     });
   },
 
+  toggleRepoChecked: (id) => {
+    set((state) => ({
+      onboardedRepos: state.onboardedRepos.map((r) =>
+        r.id === id ? { ...r, is_checked: !r.is_checked } : r
+      ),
+    }));
+  },
+
+  selectAllRepos: (selected) => {
+    set((state) => ({
+      onboardedRepos: state.onboardedRepos.map((r) => ({ ...r, is_checked: selected })),
+    }));
+  },
+
+  addRepoBranch: (repoId, branch) => {
+    const trimmed = branch.trim();
+    if (!trimmed) return;
+    set((state) => ({
+      onboardedRepos: state.onboardedRepos.map((r) => {
+        if (r.id !== repoId) return r;
+        if (r.selected_branches.includes(trimmed)) return r;
+        return {
+          ...r,
+          selected_branches: [...r.selected_branches, trimmed],
+          available_branches: Array.from(new Set([...(r.available_branches || []), trimmed])),
+        };
+      }),
+    }));
+  },
+
+  removeRepoBranch: (repoId, branch) => {
+    set((state) => ({
+      onboardedRepos: state.onboardedRepos.map((r) => {
+        if (r.id !== repoId) return r;
+        // Don't allow removing if it's the only branch
+        if (r.selected_branches.length <= 1) return r;
+        return {
+          ...r,
+          selected_branches: r.selected_branches.filter((b) => b !== branch),
+        };
+      }),
+    }));
+  },
+
+  batchIndexRepos: (repoIds) => {
+    const targetIds = repoIds || get().onboardedRepos.filter((r) => r.is_checked).map((r) => r.id);
+    if (!targetIds.length) return;
+
+    set((state) => ({
+      onboardedRepos: state.onboardedRepos.map((r) =>
+        targetIds.includes(r.id) ? { ...r, status: 'INDEXING' } : r
+      ),
+    }));
+
+    const reposList = get().onboardedRepos.filter((r) => targetIds.includes(r.id));
+    const totalBranches = reposList.reduce((acc, r) => acc + (r.selected_branches?.length || 1), 0);
+
+    get().addLiveEvent({
+      type: 'AST_INDEXED',
+      title: `Batch AST Indexing Initiated (${targetIds.length} Repos, ${totalBranches} Branches)`,
+      description: `Starting parallel AST worker threads for repos: ${reposList.map((r) => r.name).join(', ')}`,
+      severity: 'info',
+    });
+
+    setTimeout(() => {
+      set((state) => ({
+        onboardedRepos: state.onboardedRepos.map((r) =>
+          targetIds.includes(r.id)
+            ? {
+                ...r,
+                status: 'INDEXED',
+                last_indexed_at: new Date().toISOString(),
+                stats: {
+                  files_count: Math.floor(100 + Math.random() * 120),
+                  lines_of_code: Math.floor(18000 + Math.random() * 25000),
+                  symbols_count: Math.floor(600 + Math.random() * 500),
+                  kg_nodes_count: Math.floor(35 + Math.random() * 30),
+                  kg_edges_count: Math.floor(60 + Math.random() * 60),
+                  languages: { TypeScript: 55, Python: 35, Shell: 10 },
+                },
+              }
+            : r
+        ),
+      }));
+
+      get().addLiveEvent({
+        type: 'AST_INDEXED',
+        title: `Batch Indexing Complete for ${targetIds.length} Repositories`,
+        description: `Constructed Knowledge Graph symbol topologies across all selected branches.`,
+        severity: 'success',
+      });
+    }, 2200);
+  },
+
   startIndexingRepo: (id) => {
+    const repo = get().onboardedRepos.find((r) => r.id === id);
+    const branches = repo?.selected_branches || ['main'];
+
     set((state) => ({
       onboardedRepos: state.onboardedRepos.map((r) =>
         r.id === id ? { ...r, status: 'INDEXING' } : r
@@ -953,8 +1071,8 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
 
     get().addLiveEvent({
       type: 'AST_INDEXED',
-      title: 'Repository Indexing Started',
-      description: `Analyzing AST symbol trees, dependency graphs, and complexity metrics for repository ${id}`,
+      title: `Repository Indexing Started: ${repo?.name || id}`,
+      description: `Analyzing AST symbol trees across ${branches.length} branches (${branches.join(', ')})`,
       severity: 'info',
     });
 
@@ -982,7 +1100,7 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
       get().addLiveEvent({
         type: 'AST_INDEXED',
         title: 'Knowledge Graph Successfully Generated',
-        description: 'Parsed 864 symbols, extracted 48 Knowledge Graph nodes and 92 dependency edges.',
+        description: `Parsed 864 symbols across branches [${branches.join(', ')}], extracted 48 Knowledge Graph nodes and 92 dependency edges.`,
         severity: 'success',
       });
     }, 2000);

@@ -139,6 +139,8 @@ export interface OnboardedRepo {
   provider: 'github' | 'gitlab' | 'bitbucket' | 'azure_devops' | 'custom_git';
   url: string;
   default_branch: string;
+  selected_branches: string[];
+  available_branches?: string[];
   status: 'NOT_INDEXED' | 'INDEXING' | 'INDEXED' | 'FAILED' | 'OUT_OF_SYNC';
   last_indexed_at?: string;
   stats: {
@@ -151,6 +153,7 @@ export interface OnboardedRepo {
   };
   auth_type: 'pat' | 'ssh' | 'oauth' | 'none';
   selected?: boolean;
+  is_checked?: boolean;
 }
 
 export interface KnowledgeGraphNode {

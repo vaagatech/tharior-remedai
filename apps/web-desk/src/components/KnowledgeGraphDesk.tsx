@@ -52,8 +52,19 @@ export const KnowledgeGraphDesk: React.FC = () => {
             <h1 className="text-2xl font-bold text-slate-900">Repository Knowledge Graph</h1>
           </div>
           <p className="text-slate-600 text-sm">
-            Interactive AST Knowledge Graph for <strong className="text-slate-800">{activeRepo?.name || 'tharior-remedai'}</strong>. Visualizes architectural modules, class hierarchies, and call relationships.
+            Interactive AST Knowledge Graph for <strong className="text-slate-800">{activeRepo?.name || 'tharior-remedai'}</strong>. Visualizes architectural modules, class hierarchies, and call relationships across indexed branches.
           </p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-xs font-semibold text-slate-500">Indexed Branches:</span>
+            {(activeRepo?.selected_branches || ['main']).map((b) => (
+              <span
+                key={b}
+                className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-xs font-mono font-medium"
+              >
+                {b}
+              </span>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
