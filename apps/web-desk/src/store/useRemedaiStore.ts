@@ -781,6 +781,8 @@ interface RemedaiStore {
   onboardedRepos: OnboardedRepo[];
   activeRepo: OnboardedRepo | null;
   onboardRepo: (repo: Omit<OnboardedRepo, 'id' | 'status' | 'stats'>) => Promise<void>;
+  updateRepo: (id: string, updated: Partial<OnboardedRepo>) => Promise<void>;
+  deleteRepo: (id: string) => Promise<void>;
   selectRepo: (id: string) => Promise<void>;
   startIndexingRepo: (id: string) => Promise<void>;
   toggleRepoChecked: (id: string) => void;
@@ -793,6 +795,7 @@ interface RemedaiStore {
   knowledgeGraph: KnowledgeGraphData;
   selectedKGNode: KnowledgeGraphNode | null;
   selectKGNode: (node: KnowledgeGraphNode | null) => void;
+  fetchKnowledgeGraph: (repoId: string) => Promise<void>;
 
   // System Intelligent Routing
   lastRoutingDecision: SystemRoutingDecision | null;
@@ -945,6 +948,68 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
     }
   },
 
+  updateRepo: async (id, updated) => {
+    try {
+      await apiFetch<OnboardedRepo>(`/api/v1/repos/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updated),
+      });
+    } catch {
+      // Fallback
+    }
+
+    set((state) => ({
+      onboardedRepos: state.onboardedRepos.map((r) =>
+        r.id === id ? { ...r, ...updated } : r
+      ),
+      activeRepo: state.activeRepo?.id === id ? { ...state.activeRepo, ...updated } : state.activeRepo,
+    }));
+
+    get().addLiveEvent({
+      type: 'AST_INDEXED',
+      title: `Repository Updated: ${updated.name || id}`,
+      description: 'Repository settings, branch tags, and authentication configurations updated.',
+      severity: 'info',
+    });
+  },
+
+  deleteRepo: async (id) => {
+    const target = get().onboardedRepos.find((r) => r.id === id);
+    try {
+      await apiFetch(`/api/v1/repos/${id}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      // Fallback
+    }
+
+    set((state) => {
+      const remaining = state.onboardedRepos.filter((r) => r.id !== id);
+      return {
+        onboardedRepos: remaining,
+        activeRepo: remaining.length > 0 ? remaining[0] : null,
+      };
+    });
+
+    get().addLiveEvent({
+      type: 'AST_INDEXED',
+      title: `Repository Removed: ${target?.name || id}`,
+      description: 'Repository purged from tenant store and AST symbol tables cleared.',
+      severity: 'warning',
+    });
+  },
+
+  fetchKnowledgeGraph: async (repoId: string) => {
+    try {
+      const kg = await apiFetch<KnowledgeGraphData>(`/api/v1/repos/${repoId}/knowledge-graph`);
+      if (kg && kg.nodes && kg.nodes.length > 0) {
+        set({ knowledgeGraph: kg, selectedKGNode: kg.nodes[0] || null });
+      }
+    } catch {
+      // Keep current
+    }
+  },
+
   selectRepo: async (id) => {
     const found = get().onboardedRepos.find((r) => r.id === id) || null;
     set((state) => ({
@@ -953,14 +1018,7 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
     }));
 
     if (found) {
-      try {
-        const kg = await apiFetch<KnowledgeGraphData>(`/api/v1/repos/${id}/knowledge-graph`);
-        if (kg && kg.nodes) {
-          set({ knowledgeGraph: kg, selectedKGNode: kg.nodes[0] || null });
-        }
-      } catch {
-        // Keep current graph if backend unreachable
-      }
+      get().fetchKnowledgeGraph(id);
     }
   },
 

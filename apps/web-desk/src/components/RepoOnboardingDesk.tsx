@@ -19,15 +19,19 @@ import {
   ExternalLink,
   ShieldCheck,
   RotateCw,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
-import type { GitAuthMethod, RepoAuthConfig } from '../types';
+import type { GitAuthMethod, RepoAuthConfig, OnboardedRepo } from '../types';
 
 export const RepoOnboardingDesk: React.FC = () => {
   const {
     onboardedRepos,
     activeRepo,
     onboardRepo,
+    updateRepo,
+    deleteRepo,
     selectRepo,
     startIndexingRepo,
     toggleRepoChecked,
@@ -58,9 +62,56 @@ export const RepoOnboardingDesk: React.FC = () => {
   const [accessToken, setAccessToken] = useState('');
   const [sshKey, setSshKey] = useState('');
 
+  // Edit Repo State
+  const [editingRepo, setEditingRepo] = useState<OnboardedRepo | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editOwner, setEditOwner] = useState('');
+  const [editUrl, setEditUrl] = useState('');
+  const [editDefaultBranch, setEditDefaultBranch] = useState('');
+  const [editBranchTags, setEditBranchTags] = useState<string[]>([]);
+  const [editNewBranchInput, setEditNewBranchInput] = useState('');
+  const [editAuthMethod, setEditAuthMethod] = useState<GitAuthMethod>('github_app');
+
+  // Delete Repo State
+  const [deletingRepo, setDeletingRepo] = useState<OnboardedRepo | null>(null);
+
   // Quick inline branch adder state per card
   const [inlineBranchCardId, setInlineBranchCardId] = useState<string | null>(null);
   const [inlineBranchInput, setInlineBranchInput] = useState('');
+
+  const handleStartEdit = (repo: OnboardedRepo) => {
+    setEditingRepo(repo);
+    setEditName(repo.name);
+    setEditOwner(repo.owner || 'vaagatech');
+    setEditUrl(repo.url);
+    setEditDefaultBranch(repo.default_branch || 'main');
+    setEditBranchTags(repo.selected_branches?.length ? [...repo.selected_branches] : [repo.default_branch || 'main']);
+    setEditAuthMethod(repo.auth_type || 'github_app');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRepo) return;
+
+    const finalBranches = Array.from(new Set([editDefaultBranch || 'main', ...editBranchTags]));
+
+    await updateRepo(editingRepo.id, {
+      name: editName,
+      owner: editOwner,
+      url: editUrl,
+      default_branch: editDefaultBranch || 'main',
+      selected_branches: finalBranches,
+      auth_type: editAuthMethod,
+    });
+
+    setEditingRepo(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingRepo) return;
+    await deleteRepo(deletingRepo.id);
+    setDeletingRepo(null);
+  };
 
   const handleAddTag = (tagToAdd?: string) => {
     const tag = (tagToAdd || newBranchInput).trim();
@@ -475,6 +526,31 @@ export const RepoOnboardingDesk: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
+                      title="Edit Repository"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartEdit(repo);
+                      }}
+                      className="p-1.5 bg-white hover:bg-slate-100 text-slate-500 hover:text-indigo-600 rounded-lg border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Delete Repository"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingRepo(repo);
+                      }}
+                      className="p-1.5 bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg border border-slate-200 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         startIndexingRepo(repo.id);
@@ -487,6 +563,7 @@ export const RepoOnboardingDesk: React.FC = () => {
                     </button>
 
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         selectRepo(repo.id);
@@ -824,6 +901,179 @@ export const RepoOnboardingDesk: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Repository Modal */}
+      {editingRepo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-lg">Edit Repository Configuration</h3>
+                  <p className="text-xs text-slate-500">Update name, branches, and credentials for {editingRepo.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRepo(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Repository Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Owner / Organization</label>
+                <input
+                  type="text"
+                  required
+                  value={editOwner}
+                  onChange={(e) => setEditOwner(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Git Clone URL</label>
+                <input
+                  type="url"
+                  required
+                  value={editUrl}
+                  onChange={(e) => setEditUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Default Branch</label>
+                <input
+                  type="text"
+                  required
+                  value={editDefaultBranch}
+                  onChange={(e) => setEditDefaultBranch(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                />
+              </div>
+
+              {/* Branch Cloud Tags */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold uppercase text-slate-600">
+                  Indexed Branch Cloud Tags
+                </label>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap gap-1.5 items-center min-h-[44px]">
+                  {editBranchTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-mono font-medium"
+                    >
+                      <GitBranch className="w-3 h-3" />
+                      <span>{tag}</span>
+                      {editBranchTags.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditBranchTags(editBranchTags.filter((t) => t !== tag))}
+                          className="ml-1 text-indigo-400 hover:text-red-500 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+
+                  <div className="flex items-center gap-1 flex-1 min-w-[130px]">
+                    <input
+                      type="text"
+                      placeholder="Add branch tag & enter..."
+                      value={editNewBranchInput}
+                      onChange={(e) => setEditNewBranchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = editNewBranchInput.trim();
+                          if (val && !editBranchTags.includes(val)) {
+                            setEditBranchTags([...editBranchTags, val]);
+                            setEditNewBranchInput('');
+                          }
+                        }
+                      }}
+                      className="w-full bg-transparent text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none px-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingRepo(null)}
+                  className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl text-sm shadow-sm cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Repository Confirmation Modal */}
+      {deletingRepo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg">Delete Repository?</h3>
+                <p className="text-xs text-slate-500">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 leading-relaxed">
+              Are you sure you want to remove <strong className="text-slate-900 font-mono">{deletingRepo.name}</strong> from RemedAI? All indexed AST Knowledge Graph entities, symbol call maps, and cached vectors will be purged.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingRepo(null)}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-sm shadow-sm cursor-pointer transition-colors"
+              >
+                Delete Repository
+              </button>
+            </div>
           </div>
         </div>
       )}
