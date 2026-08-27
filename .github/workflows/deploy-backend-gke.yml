@@ -158,5 +158,10 @@ jobs:
             -f app-config.yaml \
             --namespace remedai \
             --set global.image="$IMAGE_URI" \
-            --set app.image="$IMAGE_URI" \
-            --wait --timeout 5m
+            --set app.image="$IMAGE_URI"
+
+          echo "Verifying workload rollout status in namespace remedai..."
+          kubectl rollout status deployment/remedai-bff -n remedai --timeout=180s
+          kubectl rollout status deployment/remedai-scheduler -n remedai --timeout=180s
+          echo "Current deployment and autoscaling status:"
+          kubectl get pods,svc,scaledobject,scaledjob -n remedai
