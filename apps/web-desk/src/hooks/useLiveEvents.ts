@@ -6,8 +6,11 @@ import type {
   SystemMetrics,
   AgentCard,
 } from '../types';
+import { useRemedaiStore } from '../store/useRemedaiStore';
 
 export function useLiveEvents() {
+  const { apiBaseUrl, setIsApiConnected } = useRemedaiStore();
+
   const [metrics, setMetrics] = useState<TelemetryMetrics>({
     total_dispatched: 2419,
     success_rate_percent: 99.8,
@@ -34,85 +37,124 @@ export function useLiveEvents() {
   const [clarifications, setClarifications] = useState<ClarificationSession[]>([]);
   const [agents, setAgents] = useState<AgentCard[]>([]);
   const [connected, setConnected] = useState(false);
-  const [liveLogStream, setLiveLogStream] = useState<Array<{ id: string; time: string; msg: string; type: string }>>([]);
+  const [liveLogStream, setLiveLogStream] = useState<Array<{ id: string; time: string; msg: string; type: string }>>([
+    {
+      id: 'init-1',
+      time: new Date().toLocaleTimeString(),
+      msg: 'Autonomous Remediation Mesh Ready. Multi-tenant sandboxing active.',
+      type: 'info',
+    },
+  ]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectAttempt = useRef<number>(0);
+
+  const getFullUrl = useCallback(
+    (path: string) => {
+      const base = apiBaseUrl?.trim() || '';
+      return `${base.replace(/\/$/, '')}${path}`;
+    },
+    [apiBaseUrl]
+  );
 
   const fetchInitialData = useCallback(async () => {
     try {
-      const [mRes, sRes, rRes, cRes, aRes] = await Promise.all([
-        fetch('/api/v1/metrics').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/v1/metrics/system').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/v1/tickets/reports').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/v1/clarification/all').then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/v1/agents').then((r) => (r.ok ? r.json() : null)),
+      const headers = { Accept: 'application/json' };
+      const [mRes, sRes, rRes, cRes, aRes] = await Promise.allSettled([
+        fetch(getFullUrl('/api/v1/metrics'), { headers }).then((r) => (r.ok ? r.json() : null)),
+        fetch(getFullUrl('/api/v1/metrics/system'), { headers }).then((r) => (r.ok ? r.json() : null)),
+        fetch(getFullUrl('/api/v1/tickets/reports'), { headers }).then((r) => (r.ok ? r.json() : null)),
+        fetch(getFullUrl('/api/v1/clarification/all'), { headers }).then((r) => (r.ok ? r.json() : null)),
+        fetch(getFullUrl('/api/v1/agents'), { headers }).then((r) => (r.ok ? r.json() : null)),
       ]);
 
-      if (mRes) setMetrics(mRes);
-      if (sRes) setSystemMetrics(sRes);
-      if (rRes) setReports(rRes);
-      if (cRes) setClarifications(cRes);
-      if (aRes) setAgents(aRes);
-    } catch (e) {
-      console.warn('[useLiveEvents] Initial REST fetch fallback:', e);
+      if (mRes.status === 'fulfilled' && mRes.value) setMetrics(mRes.value);
+      if (sRes.status === 'fulfilled' && sRes.value) setSystemMetrics(sRes.value);
+      if (rRes.status === 'fulfilled' && rRes.value) setReports(rRes.value);
+      if (cRes.status === 'fulfilled' && cRes.value) setClarifications(cRes.value);
+      if (aRes.status === 'fulfilled' && aRes.value) setAgents(aRes.value);
+    } catch {
+      // Graceful fallback to client-side initialized metrics
     }
-  }, []);
+  }, [getFullUrl]);
 
   useEffect(() => {
     fetchInitialData();
-    const interval = setInterval(async () => {
-      try {
-        const s = await fetch('/api/v1/metrics/system').then((r) => r.json());
-        if (s) setSystemMetrics(s);
-        const m = await fetch('/api/v1/metrics').then((r) => r.json());
-        if (m) setMetrics(m);
-      } catch (err) {
-        // quiet
-      }
-    }, 5000);
+    const interval = setInterval(fetchInitialData, 15000);
     return () => clearInterval(interval);
   }, [fetchInitialData]);
 
   useEffect(() => {
     let reconnectTimeout: any = null;
+    let isCancelled = false;
 
     const connectWs = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws/events`;
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
+      if (isCancelled) return;
 
-      ws.onopen = () => {
-        setConnected(true);
-        addLog('Connected to Reactive Event Bus WebSocket', 'info');
-      };
+      // Only attempt WebSocket if apiBaseUrl is specified or running locally
+      const base = apiBaseUrl?.trim() || '';
+      let wsUrl = '';
 
-      ws.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          handleEvent(payload);
-        } catch (e) {
-          // ignore
-        }
-      };
-
-      ws.onclose = () => {
+      if (base) {
+        const isSecure = base.startsWith('https:');
+        const cleanBase = base.replace(/^https?:\/\//, '');
+        wsUrl = `${isSecure ? 'wss:' : 'ws:'}//${cleanBase}/ws/events`;
+      } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${protocol}//${window.location.host}/ws/events`;
+      } else {
+        // Static CloudFront CDN without backend proxy: skip noisy WS attempts until API URL is provided in Settings
         setConnected(false);
-        reconnectTimeout = setTimeout(connectWs, 3000);
-      };
+        setIsApiConnected(false);
+        return;
+      }
 
-      ws.onerror = () => {
-        ws.close();
-      };
+      try {
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+          setConnected(true);
+          setIsApiConnected(true);
+          reconnectAttempt.current = 0;
+          addLog('Connected to Reactive Event Bus WebSocket', 'info');
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            handleEvent(payload);
+          } catch {
+            // ignore
+          }
+        };
+
+        ws.onclose = () => {
+          setConnected(false);
+          setIsApiConnected(false);
+          if (!isCancelled) {
+            reconnectAttempt.current += 1;
+            const delay = Math.min(30000, Math.pow(2, Math.min(reconnectAttempt.current, 5)) * 1000);
+            reconnectTimeout = setTimeout(connectWs, delay);
+          }
+        };
+
+        ws.onerror = () => {
+          ws.close();
+        };
+      } catch {
+        setConnected(false);
+      }
     };
 
     connectWs();
 
     return () => {
+      isCancelled = true;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (wsRef.current) wsRef.current.close();
     };
-  }, []);
+  }, [apiBaseUrl, setIsApiConnected]);
 
   const addLog = (msg: string, type: 'info' | 'warn' | 'success' | 'agent' = 'info') => {
     const timeStr = new Date().toLocaleTimeString();
@@ -144,12 +186,12 @@ export function useLiveEvents() {
 
   const triggerGC = async () => {
     try {
-      const res = await fetch('/api/v1/system/gc', { method: 'POST' });
+      const res = await fetch(getFullUrl('/api/v1/system/gc'), { method: 'POST' });
       const data = await res.json();
       if (data.metrics) setSystemMetrics(data.metrics);
       addLog('Forced Garbage Collection executed. Headroom preserved.', 'success');
-    } catch (e) {
-      console.error(e);
+    } catch {
+      // quiet
     }
   };
 

@@ -9,7 +9,115 @@ export type TaskStatus =
   | 'RESOLVED'
   | 'FAILED';
 
-export type TierLevel = 'nano' | 'mid' | 'frontier';
+export type TierLevel =
+  | 'tier_1_micro_lint'
+  | 'tier_2_ultra_fast'
+  | 'tier_3_economy_coder'
+  | 'tier_4_mid_generalist'
+  | 'tier_5_fast_reasoner'
+  | 'tier_6_core_workhorse'
+  | 'tier_7_deep_reasoner'
+  | 'tier_8_senior_architect'
+  | 'tier_9_frontier_synthesis'
+  | 'tier_10_elite_consensus'
+  // Legacy aliases
+  | 'nano'
+  | 'mid'
+  | 'frontier';
+
+export type ModalityType = 'text' | 'audio' | 'video' | 'image' | 'presentation' | 'pdf';
+
+export interface ModelTierSpec {
+  tier: TierLevel;
+  tier_number: number;
+  name: string;
+  description: string;
+  functional_specialization: string;
+  knowledge_vs_reasoning: string;
+  target_tasks: string[];
+  representative_models: string[];
+  input_cost_per_1m_usd: number;
+  output_cost_per_1m_usd: number;
+  est_latency_ms: number;
+  benchmarks: Record<string, string>;
+  reasoning_level: 'minimal' | 'low' | 'balanced' | 'high' | 'ultra' | 'multi_agent_consensus';
+  cost_category: string;
+}
+
+export interface ModelCatalogEntry {
+  id: string;
+  name: string;
+  context_length: number;
+  prompt_cost_per_1m: number;
+  completion_cost_per_1m: number;
+  latency_tier: string;
+  tokens_per_second: number;
+  is_free: boolean;
+  system_tier: TierLevel;
+  effective_tier: TierLevel;
+  modalities: ModalityType[];
+  coding_score?: number;
+  reasoning_score?: number;
+}
+
+export interface CustomerTierOverrideConfig {
+  tenant_id: string;
+  allowed_models: string[];
+  tier_shifts: Record<string, number>; // model_id -> -2, -1, 0, 1, 2
+  prefer_free_models: boolean;
+  custom_openrouter_url?: string;
+  custom_openrouter_key?: string;
+  refresh_interval_hours: number;
+}
+
+export interface MultimodalTierSpec {
+  modality: ModalityType;
+  group_name: string;
+  description: string;
+  tiers: Array<{
+    tier_level: string;
+    model_id: string;
+    name: string;
+    cost_estimate: string;
+    latency_estimate: string;
+    max_duration_or_res: string;
+    capabilities: string[];
+  }>;
+}
+
+export interface BacklogStory {
+  id: string;
+  source: 'github' | 'gitlab' | 'jira' | 'linear';
+  key: string;
+  title: string;
+  description: string;
+  repo: string;
+  branch: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'BACKLOG' | 'ASSIGNED' | 'IN_PROGRESS' | 'REVIEW' | 'MERGED';
+  assigned_agent?: string;
+  tier_needed: TierLevel;
+  estimated_cost_usd: number;
+  created_at: string;
+  comments_count: number;
+  pr_url?: string;
+  auto_merge_allowed: boolean;
+}
+
+export interface PromptExecutionRequest {
+  prompt: string;
+  code_context?: string;
+  file_path?: string;
+  repo_name?: string;
+  agent_role: 'coder' | 'architect' | 'bug_hunter' | 'sast_guard' | 'pr_reviewer' | 'autonomous_lead';
+  target_tier: TierLevel;
+  selected_model?: string;
+  enable_internet_search: boolean;
+  enable_ast_inspection: boolean;
+  consensus_mode: boolean;
+  user_id?: string;
+  tenant_id?: string;
+}
 
 export interface ClarificationQuestion {
   id: string;
@@ -100,11 +208,7 @@ export interface TelemetryMetrics {
   aggregate_cost_usd: number;
   avg_cost_per_fix_usd: number;
   active_mcp_tools: number;
-  tier_distribution: {
-    nano: number;
-    mid: number;
-    frontier: number;
-  };
+  tier_distribution: Record<string, number>;
   total_tokens: number;
 }
 
@@ -118,4 +222,13 @@ export interface SystemMetrics {
   usage_percent: number;
   cpu_percent: number;
   headroom_healthy: boolean;
+}
+
+export interface SearchItem {
+  id: string;
+  title: string;
+  category: 'TIER' | 'MODEL' | 'AGENT' | 'STORY' | 'PLAYBOOK' | 'EVENT' | 'TOOL';
+  subtitle: string;
+  path: string;
+  meta?: Record<string, any>;
 }
