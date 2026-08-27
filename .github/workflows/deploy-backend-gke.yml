@@ -140,10 +140,17 @@ jobs:
             fi
           fi
 
-          # Ensure namespace exists and is not terminating
+          # Ensure namespace exists and is not stuck in terminating
+          WAIT_COUNT=0
           while kubectl get ns remedai 2>/dev/null | grep -q "Terminating"; do
-            echo "Waiting for terminating namespace remedai to finalize..."
+            echo "Waiting for terminating namespace remedai to finalize ($WAIT_COUNT/10)..."
             sleep 3
+            WAIT_COUNT=$((WAIT_COUNT + 1))
+            if [ $WAIT_COUNT -ge 10 ]; then
+              echo "Force-releasing namespace finalizers..."
+              kubectl get ns remedai -o json 2>/dev/null | jq '.spec.finalizers = []' | kubectl replace --raw "/api/v1/namespaces/remedai/finalize" -f - 2>/dev/null || true
+              break
+            fi
           done
           kubectl get ns remedai >/dev/null 2>&1 || kubectl create namespace remedai
 
