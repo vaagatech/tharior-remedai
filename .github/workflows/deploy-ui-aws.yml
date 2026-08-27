@@ -58,7 +58,23 @@ jobs:
         run: |
           cd deploy/terraform-aws
           terraform init
-          terraform apply -auto-approve -var="environment=${{ github.event.inputs.environment || 'dev' }}"
+
+          ENV_NAME="${{ github.event.inputs.environment || 'dev' }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET_NAME="remedai-${ENV_NAME}-ui-${ACCOUNT_ID}"
+          OAC_NAME="remedai-${ENV_NAME}-oac-${ACCOUNT_ID}"
+
+          # Import existing resources into state if already provisioned
+          terraform import -var="environment=$ENV_NAME" aws_s3_bucket.ui_bucket "$BUCKET_NAME" 2>/dev/null || true
+          terraform import -var="environment=$ENV_NAME" aws_s3_bucket_public_access_block.ui_bucket_block "$BUCKET_NAME" 2>/dev/null || true
+          
+          # Find OAC ID if already exists
+          OAC_ID=$(aws cloudfront list-origin-access-controls --query "OriginAccessControlList.Items[?Name=='$OAC_NAME'].Id" --output text 2>/dev/null || echo "")
+          if [ -n "$OAC_ID" ] && [ "$OAC_ID" != "None" ]; then
+            terraform import -var="environment=$ENV_NAME" aws_cloudfront_origin_access_control.oac "$OAC_ID" 2>/dev/null || true
+          fi
+
+          terraform apply -auto-approve -var="environment=$ENV_NAME"
 
           # Export outputs dynamically for downstream build steps
           echo "COGNITO_USER_POOL_ID=$(terraform output -raw cognito_user_pool_id)" >> $GITHUB_ENV

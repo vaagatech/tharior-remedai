@@ -131,6 +131,15 @@ jobs:
           fi
 
           echo "Deploying remedai-api with Spot resilience and KEDA autoscaling..."
+          # Clean up any stuck/failed previous release revisions
+          if helm status remedai-api --namespace remedai >/dev/null 2>&1; then
+            RELEASE_STATUS=$(helm status remedai-api --namespace remedai -o json 2>/dev/null | grep -o '"status":"[^"]*' | cut -d'"' -f4 || echo "")
+            if [ "$RELEASE_STATUS" = "failed" ] || [ "$RELEASE_STATUS" = "pending-install" ] || [ "$RELEASE_STATUS" = "pending-upgrade" ]; then
+              echo "Cleaning up previous $RELEASE_STATUS release..."
+              helm uninstall remedai-api --namespace remedai --wait || true
+            fi
+          fi
+
           helm upgrade --install remedai-api "$CHART_PATH" \
             -f app-config.yaml \
             --namespace remedai \
