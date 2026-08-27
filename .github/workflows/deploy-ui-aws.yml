@@ -35,7 +35,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -190,7 +189,7 @@ jobs:
           echo " - Target S3 Bucket:  $AWS_S3_BUCKET_NAME"
           echo " - CloudFront Domain: $CLOUDFRONT_URL"
 
-          npm ci
+          npm install --no-audit
 
           VITE_API_BASE_URL="$VITE_API_BASE_URL" \
           VITE_COGNITO_USER_POOL_ID="$COGNITO_USER_POOL_ID" \
