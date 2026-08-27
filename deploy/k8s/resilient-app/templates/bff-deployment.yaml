@@ -33,8 +33,7 @@ spec:
       # Tolerations for GKE Spot VM taint
       tolerations:
         - key: "cloud.google.com/gke-spot"
-          operator: "Equal"
-          value: "true"
+          operator: "Exists"
           effect: "NoSchedule"
 
       # Prefer scheduling on Spot nodes; fallback to on-demand if spot capacity exhausted

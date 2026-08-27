@@ -161,7 +161,19 @@ jobs:
             --set app.image="$IMAGE_URI"
 
           echo "Verifying workload rollout status in namespace remedai..."
-          kubectl rollout status deployment/remedai-bff -n remedai --timeout=180s
-          kubectl rollout status deployment/remedai-scheduler -n remedai --timeout=180s
+          kubectl rollout status deployment/remedai-bff -n remedai --timeout=180s || {
+            echo "Deployment remedai-bff failed or timed out. Pod diagnostics:"
+            kubectl get pods -n remedai
+            kubectl describe pods -n remedai
+            kubectl logs -n remedai -l app=remedai-bff --tail=100
+            exit 1
+          }
+          kubectl rollout status deployment/remedai-scheduler -n remedai --timeout=180s || {
+            echo "Deployment remedai-scheduler failed or timed out. Pod diagnostics:"
+            kubectl get pods -n remedai
+            kubectl describe pods -n remedai
+            kubectl logs -n remedai -l app=remedai-scheduler --tail=100
+            exit 1
+          }
           echo "Current deployment and autoscaling status:"
           kubectl get pods,svc,scaledobject,scaledjob -n remedai
