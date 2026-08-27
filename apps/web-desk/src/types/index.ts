@@ -132,6 +132,37 @@ export interface SystemRoutingDecision {
   ast_features_detected: string[];
 }
 
+export type GitAuthMethod = 'github_app' | 'federated_oauth' | 'encrypted_pat' | 'ssh_key';
+
+export interface RepoAuthConfig {
+  method: GitAuthMethod;
+  app_id?: string;
+  installation_id?: string;
+  private_key_preview?: string;
+  oauth_identity?: string;
+  oauth_provider?: string;
+  encrypted_secret_preview?: string;
+  encryption_layers: string[];
+  kms_key_id: string;
+  kms_key_version: number;
+  last_rotated_at: string;
+  next_rotation_due: string;
+  rotation_period_days: number;
+}
+
+export interface SecurityVaultState {
+  double_encryption_enabled: boolean;
+  primary_kms_provider: 'AWS KMS' | 'Google Cloud KMS' | 'HashiCorp Vault';
+  kek_key_arn: string;
+  active_kek_version: number;
+  dek_cipher: 'AES-256-GCM';
+  auto_rotation_interval_days: number;
+  last_rotation_timestamp: string;
+  next_scheduled_rotation: string;
+  total_secrets_encrypted: number;
+  zero_plaintext_logs_enforced: boolean;
+}
+
 export interface OnboardedRepo {
   id: string;
   name: string;
@@ -151,7 +182,8 @@ export interface OnboardedRepo {
     kg_edges_count: number;
     languages: Record<string, number>;
   };
-  auth_type: 'pat' | 'ssh' | 'oauth' | 'none';
+  auth_type: GitAuthMethod;
+  auth_config?: RepoAuthConfig;
   selected?: boolean;
   is_checked?: boolean;
 }

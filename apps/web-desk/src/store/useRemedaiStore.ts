@@ -11,6 +11,8 @@ import type {
   SystemRoutingDecision,
   ModelCatalogEntry,
   LiveEventItem,
+  SecurityVaultState,
+  RepoAuthConfig,
 } from '../types';
 
 export const INITIAL_10_TIER_SPECS: ModelTierSpec[] = [
@@ -573,7 +575,19 @@ export const INITIAL_ONBOARDED_REPOS: OnboardedRepo[] = [
       kg_edges_count: 92,
       languages: { TypeScript: 58, Python: 34, Shell: 8 },
     },
-    auth_type: 'pat',
+    auth_type: 'github_app',
+    auth_config: {
+      method: 'github_app',
+      app_id: 'app_1092834',
+      installation_id: 'inst_5893021',
+      private_key_preview: '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA3vK9... [Encrypted 2x with AWS KMS]\n-----END RSA PRIVATE KEY-----',
+      encryption_layers: ['AES-256-GCM (Application DEK)', 'AWS KMS KEK (Envelope Encryption)'],
+      kms_key_id: 'arn:aws:kms:us-east-1:257984970292:key/mrk-849fbc09',
+      kms_key_version: 3,
+      last_rotated_at: '2026-08-01T00:00:00Z',
+      next_rotation_due: '2026-11-01T00:00:00Z',
+      rotation_period_days: 90,
+    },
     selected: true,
     is_checked: true,
   },
@@ -596,7 +610,18 @@ export const INITIAL_ONBOARDED_REPOS: OnboardedRepo[] = [
       kg_edges_count: 42,
       languages: { HCL: 65, YAML: 25, Shell: 10 },
     },
-    auth_type: 'pat',
+    auth_type: 'federated_oauth',
+    auth_config: {
+      method: 'federated_oauth',
+      oauth_identity: 'github:org:vaagatech',
+      oauth_provider: 'GitHub Enterprise Cloud SSO',
+      encryption_layers: ['AES-256-GCM (Application DEK)', 'AWS KMS KEK (Envelope Encryption)'],
+      kms_key_id: 'arn:aws:kms:us-east-1:257984970292:key/mrk-849fbc09',
+      kms_key_version: 3,
+      last_rotated_at: '2026-08-01T00:00:00Z',
+      next_rotation_due: '2026-11-01T00:00:00Z',
+      rotation_period_days: 90,
+    },
     selected: false,
     is_checked: true,
   },
@@ -907,6 +932,10 @@ interface RemedaiStore {
   selectStory: (story: BacklogStory | null) => void;
   remediateStory: (storyId: string) => Promise<void>;
 
+  // Security & KMS Double-Encryption Vault
+  securityVault: SecurityVaultState;
+  rotateSecurityKeys: () => void;
+
   // Live Events Stream
   liveEvents: LiveEventItem[];
   addLiveEvent: (event: Omit<LiveEventItem, 'id' | 'timestamp'>) => void;
@@ -920,6 +949,52 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
   activeTab: 'repos',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
+  securityVault: {
+    double_encryption_enabled: true,
+    primary_kms_provider: 'AWS KMS',
+    kek_key_arn: 'arn:aws:kms:us-east-1:257984970292:key/mrk-849fbc09',
+    active_kek_version: 3,
+    dek_cipher: 'AES-256-GCM',
+    auto_rotation_interval_days: 90,
+    last_rotation_timestamp: '2026-08-01T00:00:00Z',
+    next_scheduled_rotation: '2026-11-01T00:00:00Z',
+    total_secrets_encrypted: 18,
+    zero_plaintext_logs_enforced: true,
+  },
+
+  rotateSecurityKeys: () => {
+    const nextVer = get().securityVault.active_kek_version + 1;
+    const now = new Date().toISOString();
+    const nextRot = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    set((state) => ({
+      securityVault: {
+        ...state.securityVault,
+        active_kek_version: nextVer,
+        last_rotation_timestamp: now,
+        next_scheduled_rotation: nextRot,
+      },
+      onboardedRepos: state.onboardedRepos.map((r) => ({
+        ...r,
+        auth_config: r.auth_config
+          ? {
+              ...r.auth_config,
+              kms_key_version: nextVer,
+              last_rotated_at: now,
+              next_rotation_due: nextRot,
+            }
+          : undefined,
+      })),
+    }));
+
+    get().addLiveEvent({
+      type: 'MODEL_SYNC',
+      title: `Security KMS Key Rotation Complete (v${nextVer})`,
+      description: `Re-wrapped all active Data Encryption Keys (DEKs) with new AWS KMS Key Encryption Key version ${nextVer}.`,
+      severity: 'success',
+    });
+  },
+
   onboardedRepos: INITIAL_ONBOARDED_REPOS,
   activeRepo: INITIAL_ONBOARDED_REPOS[0],
 
@@ -930,12 +1005,25 @@ export const useRemedaiStore = create<RemedaiStore>((set, get) => ({
       new Set(repoData.selected_branches?.length ? repoData.selected_branches : [defaultBranch, 'main'])
     );
 
+    const vault = get().securityVault;
+    const authCfg: RepoAuthConfig = repoData.auth_config || {
+      method: repoData.auth_type,
+      encryption_layers: ['AES-256-GCM (Application DEK)', 'AWS KMS KEK (Envelope Encryption)'],
+      kms_key_id: vault.kek_key_arn,
+      kms_key_version: vault.active_kek_version,
+      last_rotated_at: vault.last_rotation_timestamp,
+      next_rotation_due: vault.next_scheduled_rotation,
+      rotation_period_days: vault.auto_rotation_interval_days,
+    };
+
     const newRepo: OnboardedRepo = {
       ...repoData,
       id: `repo-${Date.now()}`,
       default_branch: defaultBranch,
       selected_branches: initialBranches,
       available_branches: Array.from(new Set([defaultBranch, 'main', 'develop', 'staging'])),
+      auth_type: repoData.auth_type,
+      auth_config: authCfg,
       status: 'NOT_INDEXED',
       stats: {
         files_count: 0,

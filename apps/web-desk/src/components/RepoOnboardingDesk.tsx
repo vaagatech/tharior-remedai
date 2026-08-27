@@ -13,9 +13,15 @@ import {
   Tag,
   X,
   Layers,
-  Sparkles,
+  Shield,
+  Key,
+  Lock,
+  ExternalLink,
+  ShieldCheck,
+  RotateCw,
 } from 'lucide-react';
 import { useRemedaiStore } from '../store/useRemedaiStore';
+import type { GitAuthMethod, RepoAuthConfig } from '../types';
 
 export const RepoOnboardingDesk: React.FC = () => {
   const {
@@ -29,6 +35,8 @@ export const RepoOnboardingDesk: React.FC = () => {
     addRepoBranch,
     removeRepoBranch,
     batchIndexRepos,
+    securityVault,
+    rotateSecurityKeys,
     setActiveTab,
   } = useRemedaiStore();
 
@@ -39,9 +47,16 @@ export const RepoOnboardingDesk: React.FC = () => {
   const [defaultBranch, setDefaultBranch] = useState('main');
   const [branchTags, setBranchTags] = useState<string[]>(['main', 'develop']);
   const [newBranchInput, setNewBranchInput] = useState('');
-  const [provider, setProvider] = useState<'github' | 'gitlab' | 'bitbucket' | 'custom_git'>('github');
-  const [authType] = useState<'pat' | 'ssh' | 'oauth'>('pat');
+  const [provider, setProvider] = useState<'github' | 'gitlab' | 'bitbucket' | 'azure_devops' | 'custom_git'>('github');
+  
+  // Multi-Auth Methods
+  const [authMethod, setAuthMethod] = useState<GitAuthMethod>('github_app');
+  const [appId, setAppId] = useState('app_1092834');
+  const [installationId, setInstallationId] = useState('inst_5893021');
+  const [privateKeyPem, setPrivateKeyPem] = useState('');
+  const [oauthIdentity, setOauthIdentity] = useState('github:org:vaagatech');
   const [accessToken, setAccessToken] = useState('');
+  const [sshKey, setSshKey] = useState('');
 
   // Quick inline branch adder state per card
   const [inlineBranchCardId, setInlineBranchCardId] = useState<string | null>(null);
@@ -57,7 +72,7 @@ export const RepoOnboardingDesk: React.FC = () => {
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    if (branchTags.length <= 1) return; // Keep at least one branch
+    if (branchTags.length <= 1) return;
     setBranchTags(branchTags.filter((t) => t !== tagToRemove));
   };
 
@@ -65,9 +80,24 @@ export const RepoOnboardingDesk: React.FC = () => {
     e.preventDefault();
     if (!repoUrl || !repoName) return;
 
-    // Ensure default branch and 'main' are included
     const def = defaultBranch || 'main';
     const finalBranches = Array.from(new Set([def, ...branchTags]));
+
+    const authConfig: RepoAuthConfig = {
+      method: authMethod,
+      app_id: authMethod === 'github_app' ? appId : undefined,
+      installation_id: authMethod === 'github_app' ? installationId : undefined,
+      private_key_preview: authMethod === 'github_app' ? (privateKeyPem ? '-----BEGIN RSA PRIVATE KEY-----\n[Encrypted 2x with AWS KMS]\n-----END RSA PRIVATE KEY-----' : 'Default GitHub App Key') : undefined,
+      oauth_identity: authMethod === 'federated_oauth' ? oauthIdentity : undefined,
+      oauth_provider: authMethod === 'federated_oauth' ? `${provider.toUpperCase()} Enterprise SSO` : undefined,
+      encrypted_secret_preview: authMethod === 'encrypted_pat' ? (accessToken ? 'ghp_•••••••••••••••• [Double-Encrypted]' : undefined) : (sshKey ? 'ssh-rsa •••••••••••• [Double-Encrypted]' : undefined),
+      encryption_layers: ['AES-256-GCM (Application DEK)', 'AWS KMS KEK (Envelope Encryption)'],
+      kms_key_id: securityVault.kek_key_arn,
+      kms_key_version: securityVault.active_kek_version,
+      last_rotated_at: securityVault.last_rotation_timestamp,
+      next_rotation_due: securityVault.next_scheduled_rotation,
+      rotation_period_days: securityVault.auto_rotation_interval_days,
+    };
 
     onboardRepo({
       name: repoName,
@@ -77,7 +107,8 @@ export const RepoOnboardingDesk: React.FC = () => {
       default_branch: def,
       selected_branches: finalBranches,
       available_branches: Array.from(new Set([...finalBranches, 'staging', 'release/v2.0'])),
-      auth_type: authType,
+      auth_type: authMethod,
+      auth_config: authConfig,
     });
 
     setShowAddModal(false);
@@ -87,6 +118,8 @@ export const RepoOnboardingDesk: React.FC = () => {
     setDefaultBranch('main');
     setBranchTags(['main', 'develop']);
     setAccessToken('');
+    setPrivateKeyPem('');
+    setSshKey('');
   };
 
   const checkedRepos = onboardedRepos.filter((r) => r.is_checked);
@@ -107,10 +140,10 @@ export const RepoOnboardingDesk: React.FC = () => {
             <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
               <FolderGit2 className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">Repository Onboarding & Multi-Branch Indexing</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Repository Onboarding & Enterprise Authentication</h1>
           </div>
           <p className="text-slate-600 text-sm">
-            Step 1: Connect multiple Git repositories with multi-select branch cloud tags (default: repo default & main). Step 2: Batch index AST symbol topologies for autonomous LLM routing.
+            Install as <strong>GitHub App</strong>, connect via <strong>Federated OAuth</strong>, or use <strong>KMS Double-Encrypted API Keys</strong> with automated key rotation.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -124,31 +157,40 @@ export const RepoOnboardingDesk: React.FC = () => {
         </div>
       </div>
 
-      {/* Workflow Step Indicator */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border-2 border-indigo-500/30 rounded-xl p-4 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-8 -mt-8 pointer-events-none" />
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
-            <h3 className="font-semibold text-slate-900 text-sm">Multi-Repo & Branch Tags</h3>
+      {/* Security & Double-Encryption Status Card */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl mt-0.5">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-900 text-sm">Paramount Security: 2x Double Envelope Encryption Active</h3>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full border border-emerald-300">
+                  AES-256-GCM + AWS KMS
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                All API keys, GitHub App private keys (.pem), and tokens are encrypted twice before persistence. Zero plaintext storage.
+              </p>
+              <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 font-mono mt-2">
+                <span>KMS Key ARN: <strong className="text-slate-700">{securityVault.kek_key_arn}</strong></span>
+                <span>Active Version: <strong className="text-indigo-600">v{securityVault.active_kek_version}</strong></span>
+                <span>Next Auto-Rotation: <strong className="text-slate-700">{new Date(securityVault.next_scheduled_rotation).toLocaleDateString()}</strong></span>
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-slate-600">Connect repositories and assign cloud branch tags (e.g. main, dev, staging).</p>
-        </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200">2</span>
-            <h3 className="font-semibold text-slate-900 text-sm">Parallel AST Symbol Indexing</h3>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => rotateSecurityKeys()}
+              className="flex items-center gap-2 px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Rotate KMS Keys Now</span>
+            </button>
           </div>
-          <p className="text-xs text-slate-600">Batch parse classes, methods, imports, and generate Knowledge Graph topologies.</p>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
-          <div className="flex items-center gap-3 mb-2">
-            <span className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center border border-slate-200">3</span>
-            <h3 className="font-semibold text-slate-900 text-sm">Intelligent Code Remediation</h3>
-          </div>
-          <p className="text-xs text-slate-600">System autonomously routes prompts & issues to optimal LLMs based on multi-repo KG context.</p>
         </div>
       </div>
 
@@ -205,6 +247,7 @@ export const RepoOnboardingDesk: React.FC = () => {
             const isSelected = activeRepo?.id === repo.id;
             const isChecked = !!repo.is_checked;
             const branches = repo.selected_branches?.length ? repo.selected_branches : [repo.default_branch || 'main'];
+            const authCfg = repo.auth_config;
 
             return (
               <div
@@ -217,7 +260,7 @@ export const RepoOnboardingDesk: React.FC = () => {
                 }`}
               >
                 {/* Top Bar: Checkbox + Name + Status */}
-                <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
                   <div className="flex items-start gap-3">
                     <button
                       type="button"
@@ -264,6 +307,27 @@ export const RepoOnboardingDesk: React.FC = () => {
                         Not Indexed
                       </span>
                     )}
+                  </div>
+                </div>
+
+                {/* Authentication & Encryption Badge */}
+                <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl mb-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                    <span className="font-bold text-slate-700">Auth:</span>
+                    <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-semibold text-slate-800 text-[11px]">
+                      {repo.auth_type === 'github_app'
+                        ? 'GitHub App (Full Webhook Control)'
+                        : repo.auth_type === 'federated_oauth'
+                        ? 'Federated OAuth / SSO'
+                        : repo.auth_type === 'encrypted_pat'
+                        ? 'Double-Encrypted PAT'
+                        : 'SSH Deploy Key'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <Lock className="w-3 h-3" />
+                    <span>2x Encrypted (v{authCfg?.kms_key_version || securityVault.active_kek_version})</span>
                   </div>
                 </div>
 
@@ -403,8 +467,10 @@ export const RepoOnboardingDesk: React.FC = () => {
                 {/* Actions Footer */}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                   <div className="text-[11px] text-slate-400">
-                    Last indexed:{' '}
-                    {repo.last_indexed_at ? new Date(repo.last_indexed_at).toLocaleTimeString() : 'Never'}
+                    Rotation Due:{' '}
+                    {authCfg?.next_rotation_due
+                      ? new Date(authCfg.next_rotation_due).toLocaleDateString()
+                      : 'Active'}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -440,18 +506,18 @@ export const RepoOnboardingDesk: React.FC = () => {
         </div>
       </div>
 
-      {/* Add Repository Modal */}
+      {/* Add Repository & Authentication Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
                   <FolderGit2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900 text-lg">Onboard Source Repository</h3>
-                  <p className="text-xs text-slate-500">Configure multi-branch cloud tags for parallel indexing</p>
+                  <p className="text-xs text-slate-500">Choose authentication method & branch cloud tags</p>
                 </div>
               </div>
               <button
@@ -463,6 +529,7 @@ export const RepoOnboardingDesk: React.FC = () => {
             </div>
 
             <form onSubmit={handleOnboardSubmit} className="space-y-4">
+              {/* Git Provider Selection */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Git Provider</label>
                 <div className="grid grid-cols-4 gap-2">
@@ -483,6 +550,139 @@ export const RepoOnboardingDesk: React.FC = () => {
                 </div>
               </div>
 
+              {/* Authentication Approach Selector */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase text-slate-700 flex items-center justify-between">
+                  <span>Authentication & Access Method</span>
+                  <span className="text-[10px] text-emerald-600 font-mono font-bold flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> 2x Envelope Encryption
+                  </span>
+                </label>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'github_app', label: 'GitHub App', desc: 'Full Webhook Control', icon: ShieldCheck },
+                    { id: 'federated_oauth', label: 'Federated SSO', desc: 'OAuth2 & OIDC', icon: Key },
+                    { id: 'encrypted_pat', label: 'Encrypted PAT', desc: 'Scoped API Token', icon: Lock },
+                    { id: 'ssh_key', label: 'SSH Deploy Key', desc: 'RSA / Ed25519', icon: ExternalLink },
+                  ].map((auth) => {
+                    const Icon = auth.icon;
+                    const isSelected = authMethod === auth.id;
+                    return (
+                      <button
+                        type="button"
+                        key={auth.id}
+                        onClick={() => setAuthMethod(auth.id as GitAuthMethod)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer shadow-2xs ${
+                          isSelected
+                            ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20 text-indigo-950'
+                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 mb-1.5 ${isSelected ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <div className="font-bold text-xs">{auth.label}</div>
+                        <div className="text-[10px] text-slate-500 truncate">{auth.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Conditional Auth Inputs */}
+              {authMethod === 'github_app' && (
+                <div className="p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-indigo-950">GitHub App Configuration</span>
+                    <span className="text-[10px] font-mono text-indigo-600 bg-white px-2 py-0.5 rounded border border-indigo-200">
+                      Permissions: Read & Write Code, PRs, Webhooks
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">GitHub App ID</label>
+                      <input
+                        type="text"
+                        value={appId}
+                        onChange={(e) => setAppId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">Installation ID</label>
+                      <input
+                        type="text"
+                        value={installationId}
+                        onChange={(e) => setInstallationId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Private Key (.pem) — Encrypted 2x with AWS KMS
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
+                      value={privateKeyPem}
+                      onChange={(e) => setPrivateKeyPem(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {authMethod === 'federated_oauth' && (
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-900">Federated SSO Identity</span>
+                    <span className="text-[10px] text-emerald-600 font-mono font-bold">OIDC Active</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={oauthIdentity}
+                    onChange={(e) => setOauthIdentity(e.target.value)}
+                    placeholder="github:org:your-organization"
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Seamless organization-level federation. Tokens are minted just-in-time via AWS KMS OIDC exchange.
+                  </p>
+                </div>
+              )}
+
+              {authMethod === 'encrypted_pat' && (
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-semibold uppercase text-slate-600">Personal Access Token (PAT)</label>
+                  <input
+                    type="password"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:outline-none"
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Encrypted with local AES-256-GCM then wrapped with Cloud KMS KEK with 90-day automatic key rotation.
+                  </p>
+                </div>
+              )}
+
+              {authMethod === 'ssh_key' && (
+                <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-semibold uppercase text-slate-600">SSH Private Key</label>
+                  <textarea
+                    rows={2}
+                    placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...&#10;-----END OPENSSH PRIVATE KEY-----"
+                    value={sshKey}
+                    onChange={(e) => setSshKey(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Repo Details */}
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">Repository URL</label>
                 <input
@@ -541,7 +741,6 @@ export const RepoOnboardingDesk: React.FC = () => {
                   <span className="text-[11px] text-slate-500">Default: repo default & main</span>
                 </div>
 
-                {/* Cloud Tag Pills Container */}
                 <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-white border border-slate-200 rounded-xl min-h-[44px]">
                   {branchTags.map((tag) => (
                     <span
@@ -609,24 +808,7 @@ export const RepoOnboardingDesk: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-600 mb-1">
-                  Auth Credentials (PAT / SSH Key)
-                </label>
-                <input
-                  type="password"
-                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (Optional for public repos)"
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white font-mono text-xs"
-                />
-                <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-indigo-600" />
-                  Credentials are encrypted and stored in secure tenant KMS secret vault.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
